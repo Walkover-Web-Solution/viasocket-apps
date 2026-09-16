@@ -35,7 +35,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/finish-build.mjs",
-    "test": "npm run build && node --test \"test/*.test.mjs\"",
+    "test": "npm run build && node --test test/token.test.mjs test/client.test.mjs",
     "prepublishOnly": "npm test"
   },
   "devDependencies": {
