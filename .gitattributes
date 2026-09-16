@@ -1,0 +1,2 @@
+# One line-ending policy for every contributor, whatever their git config says.
+* text=auto eol=lf
