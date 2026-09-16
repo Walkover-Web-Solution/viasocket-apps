@@ -5,13 +5,13 @@
   "keywords": ["viasocket", "integrations", "oauth", "api", "webhooks", "slack", "github", "google-sheets"],
   "license": "MIT",
   "author": "Walkover Web Solution",
-  "homepage": "https://github.com/Walkover-Web-Solution/viasocket-apps-api#readme",
+  "homepage": "https://github.com/Walkover-Web-Solution/viasocket-apps#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Walkover-Web-Solution/viasocket-apps-api.git"
+    "url": "git+https://github.com/Walkover-Web-Solution/viasocket-apps.git"
   },
   "bugs": {
-    "url": "https://github.com/Walkover-Web-Solution/viasocket-apps-api/issues"
+    "url": "https://github.com/Walkover-Web-Solution/viasocket-apps/issues"
   },
   "engines": {
     "node": ">=20"
