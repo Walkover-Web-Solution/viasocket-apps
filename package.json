@@ -1,0 +1,44 @@
+{
+  "name": "viasocket-apps-api",
+  "version": "0.1.0",
+  "description": "Server-side client for the viaSocket Apps API: let your users connect Slack, GitHub, Google Sheets or any of 2,300+ apps from your own product, then run actions and receive events through one API.",
+  "keywords": ["viasocket", "integrations", "oauth", "api", "webhooks", "slack", "github", "google-sheets"],
+  "license": "MIT",
+  "author": "Walkover Web Solution",
+  "homepage": "https://github.com/Walkover-Web-Solution/viasocket-apps-api#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Walkover-Web-Solution/viasocket-apps-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Walkover-Web-Solution/viasocket-apps-api/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./browser": {
+      "types": "./dist/esm/browser.d.ts",
+      "import": "./dist/esm/browser.js",
+      "require": "./dist/cjs/browser.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/finish-build.mjs",
+    "test": "npm run build && node --test \"test/*.test.mjs\"",
+    "prepublishOnly": "npm test"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

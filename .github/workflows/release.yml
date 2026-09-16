@@ -1,0 +1,39 @@
+name: Release
+
+# Publishes to npm when a version tag is pushed:
+#   npm version patch|minor|major   (bumps package.json and creates the tag)
+#   git push --follow-tags
+#
+# Needs one repository secret: NPM_TOKEN, an npm "Automation" token for an account that owns
+# viasocket-apps-api. --provenance signs the build against this workflow run, which is why
+# id-token: write is granted — it only works from a public repository.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - run: npm install
+      - run: npm test
+      # The tag and package.json must agree, or a stale tag would republish an old version.
+      - name: Check the tag matches package.json
+        run: |
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$PKG" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG}" >&2
+            exit 1
+          fi
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
