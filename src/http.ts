@@ -1,10 +1,16 @@
 /**
  * The one place a request is made and a response judged.
  *
- * viaSocket answers every call with the same envelope, and it can say "no" two ways: a non-2xx
- * status, or a 2xx whose body carries `success: false`. Callers should never have to remember
- * that, so both become a ViaSocketError here with the API's own message attached — that message
- * is almost always the explanation.
+ * The embed endpoints answer with one envelope, `{ success, data }`, and can say "no" two ways:
+ * a non-2xx status, or a 2xx whose body carries `success: false`. Callers should never have to
+ * remember that, so both become a ViaSocketError here with the API's own message attached —
+ * that message is almost always the explanation.
+ *
+ * The action runner is the exception: some actions answer in that envelope, many hand back their
+ * own result at the top level with no `success` or `data` key at all (Gmail's list-mails returns
+ * `{ emails, nextPageToken }`). So a body only counts as an envelope when it actually carries a
+ * boolean `success`; anything else is the result itself. Getting this wrong returned `undefined`
+ * for every such action.
  */
 
 import { ViaSocketError } from './errors.js'
@@ -39,9 +45,16 @@ export async function request<T = unknown>(options: RequestOptions): Promise<Env
     payload = text
   }
 
-  const envelope = payload && typeof payload === 'object' ? (payload as Envelope<T> & { error?: { message?: string } }) : null
+  const isEnvelope = payload !== null && typeof payload === 'object' && typeof (payload as { success?: unknown }).success === 'boolean'
+  const envelope = isEnvelope ? (payload as Envelope<T> & { error?: { message?: string } }) : null
   if (!response.ok || envelope?.success === false) {
-    const message = envelope?.message || envelope?.error?.message || `viaSocket responded ${response.status} for ${options.method} ${options.url}`
+    const raw = payload && typeof payload === 'object' ? (payload as { message?: string; error?: { message?: string } }) : null
+    const message =
+      envelope?.message ||
+      envelope?.error?.message ||
+      raw?.message ||
+      raw?.error?.message ||
+      `viaSocket responded ${response.status} for ${options.method} ${options.url}`
     throw new ViaSocketError(message, { status: response.status, body: payload })
   }
 

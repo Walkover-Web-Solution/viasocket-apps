@@ -174,3 +174,25 @@ test('base URLs can be pointed at another environment', async () => {
   await user.listFlows()
   assert.equal(calls[0].url, 'https://dev-api.viasocket.com/projects/proj9U0smb62/integrations')
 })
+
+test('runAction returns an unwrapped result as-is — many actions answer with no envelope at all', async () => {
+  // Gmail's list-mails, verbatim shape: no `success`, no `data`, the result is the whole body.
+  const raw = { emails: [{ id: '1a0aa52fba263adc', subject: 'Re: Security alert' }], nextPageToken: '15851404148698197925' }
+  const { viasocket } = client([{ status: 200, body: raw }])
+  const result = await viasocket.runAction('scriR6F2TzG2', 'rowgko0n0edh', { max: 3 })
+  assert.deepEqual(result, raw)
+})
+
+test('runAction still unwraps and still fails on a real envelope', async () => {
+  const { viasocket } = client([
+    { status: 200, body: { success: true, data: { ok: 1 } } },
+    { status: 200, body: { success: false, message: 'action failed: bad label' } }
+  ])
+  assert.deepEqual(await viasocket.runAction('scri1', 'row1', {}), { ok: 1 })
+  await assert.rejects(viasocket.runAction('scri1', 'row1', {}), (error) => error instanceof ViaSocketError && /bad label/.test(error.message))
+})
+
+test('a non-2xx with an un-enveloped body still surfaces its message', async () => {
+  const { viasocket } = client([{ status: 500, body: { message: 'script crashed' } }])
+  await assert.rejects(viasocket.runAction('scri1', 'row1', {}), (error) => error.status === 500 && /script crashed/.test(error.message))
+})

@@ -1,8 +1,17 @@
 {
   "name": "viasocket-apps",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Server-side client for the viaSocket Apps API: let your users connect Slack, GitHub, Google Sheets or any of 2,300+ apps from your own product, then run actions and receive events through one API.",
-  "keywords": ["viasocket", "integrations", "oauth", "api", "webhooks", "slack", "github", "google-sheets"],
+  "keywords": [
+    "viasocket",
+    "integrations",
+    "oauth",
+    "api",
+    "webhooks",
+    "slack",
+    "github",
+    "google-sheets"
+  ],
   "license": "MIT",
   "author": "Walkover Web Solution",
   "homepage": "https://github.com/Walkover-Web-Solution/viasocket-apps#readme",
@@ -31,7 +40,10 @@
       "require": "./dist/cjs/browser.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/finish-build.mjs",
