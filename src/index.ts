@@ -1,7 +1,7 @@
 /**
- * viasocket-apps-api — server-side client for the viaSocket Apps API.
+ * viasocket-apps — server-side client for the viaSocket Apps API.
  *
- *   import { ViaSocket } from 'viasocket-apps-api'
+ *   import { ViaSocket } from 'viasocket-apps'
  *
  *   const viasocket = new ViaSocket({ orgId, projectId, secret: process.env.VIASOCKET_EMBED_SECRET })
  *   const user = viasocket.user(endUserId)
@@ -12,7 +12,7 @@
  *   const result = await viasocket.runAction(scriptId, actionVersionId, inputData)
  *   const sub = await user.subscribe(triggerVersionId, { authId, inputData, webhook })
  *
- * The browser half — opening the connect popup — lives at 'viasocket-apps-api/browser'.
+ * The browser half — opening the connect popup — lives at 'viasocket-apps/browser'.
  */
 
 export { ViaSocket, UserScope } from './client.js'

@@ -1,7 +1,7 @@
 /**
  * The browser half: opening the app's own consent screen and getting the connection back.
  *
- *   import { connect } from 'viasocket-apps-api/browser'
+ *   import { connect } from 'viasocket-apps/browser'
  *   const { authId } = await connect({ embedToken, serviceId })
  *
  * It wraps viaSocket's standalone connect script — the popup, the postMessage handshake, the

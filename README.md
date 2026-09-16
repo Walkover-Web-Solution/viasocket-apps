@@ -1,4 +1,4 @@
-# viasocket-apps-api
+# viasocket-apps
 
 Server-side client for the viaSocket Apps API. Let your users connect Slack, GitHub, Google
 Sheets or any of 2,300+ apps from your own product, then run actions and receive events through
@@ -8,7 +8,7 @@ you.
 Zero dependencies. Node 20+, Bun, Deno and edge runtimes.
 
 ```sh
-npm install viasocket-apps-api
+npm install viasocket-apps
 ```
 
 The same calls are documented as plain HTTP in your viaSocket dashboard under
@@ -18,7 +18,7 @@ this package is a thin, typed layer over those endpoints and adds nothing they d
 ## Server
 
 ```js
-import { ViaSocket } from 'viasocket-apps-api'
+import { ViaSocket } from 'viasocket-apps'
 
 const viasocket = new ViaSocket({
   orgId: process.env.VIASOCKET_ORG_ID,
@@ -61,7 +61,7 @@ const subscription = await user.subscribe(triggerVersionId, {
 ## Browser
 
 ```js
-import { connect } from 'viasocket-apps-api/browser'
+import { connect } from 'viasocket-apps/browser'
 
 // embedToken comes from your backend (user.token()), signed for the signed-in user.
 const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc' })
