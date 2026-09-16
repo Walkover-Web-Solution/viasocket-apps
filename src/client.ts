@@ -157,8 +157,9 @@ export class UserScope {
   }
 
   /**
-   * Subscribes to an app event. Give `webhook` (a URL we POST each event to) or `code`
-   * (JavaScript we run per event) — one or the other.
+   * Subscribes to an app event. Give `webhook` (a URL we POST each event to) or `code` (a
+   * self-contained script we run on our servers per event, with the event at
+   * `context.req.body`) — one or the other.
    */
   async subscribe(triggerVersionId: string, params: SubscribeParams): Promise<SubscribeResult> {
     if (!params?.webhook === !params?.code) {

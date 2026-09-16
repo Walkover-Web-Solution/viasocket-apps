@@ -60,7 +60,14 @@ export interface SubscribeParams {
   inputData: Record<string, unknown>
   /** Your endpoint. We POST every event to it. Use this or `code`, not both. */
   webhook?: string
-  /** JavaScript run on each event instead of a webhook. */
+  /**
+   * Instead of a webhook: a script we run on viaSocket's servers each time the event fires.
+   *
+   * It is a string of JavaScript executed away from your process, so it must stand alone — no
+   * imports and no reference to anything in your codebase. In scope there: `axios`, `fetch` and
+   * `context`; the event the app sent is `context.req.body`. Bake in any value of yours (a user
+   * id, a URL) when you build the string.
+   */
   code?: string
   /** Anything of yours; handed back with every delivery. */
   meta?: Record<string, unknown>
@@ -78,6 +85,7 @@ export interface SubscribeResult {
 }
 
 export interface UpdateSubscriptionParams {
+  /** A new script to run per event. Same rules as `SubscribeParams.code`. */
   code?: string
   meta?: Record<string, unknown>
 }

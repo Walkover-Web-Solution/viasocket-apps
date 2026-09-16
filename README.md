@@ -83,6 +83,23 @@ const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc' })
 | `viasocket.runAction(scriptId, actionVersionId, inputData)` | Run one action. Returns the app's own response. |
 | `user.subscribe(triggerVersionId, { authId, inputData, webhook \| code, meta })` | Subscribe to an app event. Returns `{ scriptId, hookUrl, … }`. |
 | `user.updateSubscription(scriptId, { code, meta })` | Change a live subscription in place. |
+
+`webhook` is a URL of yours that we POST each event to. `code` is the alternative: a script we run
+on viaSocket's servers each time the event fires. It is a string, executed away from your process,
+so it must stand alone — no imports, nothing from your codebase. In scope there are `axios`, `fetch`
+and `context`, and the event the app sent is `context.req.body`:
+
+```js
+await user.subscribe(triggerVersionId, {
+  authId,
+  inputData,
+  code: `
+    const event = context.req.body
+    await axios.post("https://your-app.com/webhooks/viasocket", { event, user_id: "${endUserId}" })
+    return { forwarded: true }
+  `
+})
+```
 | `user.listFlows()` | Every enabled app and subscription this user has. |
 | `user.disableFlow(scriptId)` / `user.enableFlow(scriptId)` | Turn a flow off or back on. Disabling a subscription ends it. |
 | `user.listConnections()` | Every app this user has connected. |
