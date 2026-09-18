@@ -157,13 +157,14 @@ export class UserScope {
   }
 
   /**
-   * Subscribes to an app event. Give `webhook` (a URL we POST each event to) or `code` (a
-   * self-contained script we run on our servers per event, with the event at
-   * `context.req.body`) — one or the other.
+   * Subscribes to an app event with a handler: `code`, a self-contained script we run on our
+   * servers each time the event fires, with the event at `context.req.body`. It runs an action in
+   * another app the user connected, or calls your own API. `webhook` (a public URL we POST raw
+   * events to) is the edge case. Exactly one of the two.
    */
   async subscribe(triggerVersionId: string, params: SubscribeParams): Promise<SubscribeResult> {
     if (!params?.webhook === !params?.code) {
-      throw new ViaSocketError('subscribe: pass exactly one of `webhook` or `code`', { status: null })
+      throw new ViaSocketError('subscribe: pass exactly one of `code` (a handler we run per event) or `webhook`', { status: null })
     }
     const body: Record<string, unknown> = {
       auth_id: required('authId', params.authId),

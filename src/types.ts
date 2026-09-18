@@ -56,19 +56,23 @@ export interface EnableResult {
 
 export interface SubscribeParams {
   authId: string
-  /** The event's own configuration — which channel, which sheet. */
-  inputData: Record<string, unknown>
-  /** Your endpoint. We POST every event to it. Use this or `code`, not both. */
-  webhook?: string
   /**
-   * Instead of a webhook: a script we run on viaSocket's servers each time the event fires.
+   * The event's own configuration — which channel, which sheet. For polled triggers it may also
+   * carry `scheduledTime`, the minutes between checks as a string: "5" or "15".
+   */
+  inputData: Record<string, unknown>
+  /**
+   * What to do when the event fires: a script we run on viaSocket's servers per event. The
+   * default. It runs an action in another app the user connected, or calls your own API.
    *
    * It is a string of JavaScript executed away from your process, so it must stand alone — no
    * imports and no reference to anything in your codebase. In scope there: `axios`, `fetch` and
-   * `context`; the event the app sent is `context.req.body`. Bake in any value of yours (a user
-   * id, a URL) when you build the string.
+   * `context`; the event the app sent is `context.req.body`. Bake in any value of yours (a
+   * script_id, a picked id, an API key) when you build the string. Exactly one of `code` or `webhook`.
    */
   code?: string
+  /** Edge case: a public, unauthenticated URL of yours. We POST every raw event to it. */
+  webhook?: string
   /** Anything of yours; handed back with every delivery. */
   meta?: Record<string, unknown>
 }

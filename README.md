@@ -49,12 +49,14 @@ const result = await viasocket.runAction(scriptId, actionVersionId, {
   column_key: true
 })
 
-// 5. Or subscribe to an event. Needs only the connection, not enable().
+// 5. Or subscribe to an event. Needs only the connection, not enable(). `code` is a handler we
+//    run on our servers when the event fires — see "Events" below. Save the scriptId it returns
+//    together with the inputData and handler you sent: the flows list never returns those.
 const subscription = await user.subscribe(triggerVersionId, {
   authId,
   inputData: { channel_id: ['C08SXCV3J85'] },
-  webhook: 'https://your-app.com/webhooks/viasocket',
-  meta: { userId: 'user_123' }
+  code: handler,
+  meta: { user_id: 'user_123' }
 })
 ```
 
@@ -81,25 +83,43 @@ const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc' })
 | `user.findEnabled(serviceId)` | The `scriptId` if this app is already enabled, else `null`. Call before `enable`. |
 | `user.listOptions(actionVersionId, { fieldKey, authId, existingFields })` | The values a field accepts, as `{ options, offset }`. Both response shapes normalised. |
 | `viasocket.runAction(scriptId, actionVersionId, inputData)` | Run one action. Returns the app's own response. |
-| `user.subscribe(triggerVersionId, { authId, inputData, webhook \| code, meta })` | Subscribe to an app event. Returns `{ scriptId, hookUrl, … }`. |
+| `user.subscribe(triggerVersionId, { authId, inputData, code \| webhook, meta })` | Subscribe to an app event with a handler we run per event. Returns `{ scriptId, hookUrl, … }`. |
 | `user.updateSubscription(scriptId, { code, meta })` | Change a live subscription in place. |
 
-`webhook` is a URL of yours that we POST each event to. `code` is the alternative: a script we run
-on viaSocket's servers each time the event fires. It is a string, executed away from your process,
-so it must stand alone — no imports, nothing from your codebase. In scope there are `axios`, `fetch`
-and `context`, and the event the app sent is `context.req.body`:
+## Events
+
+Subscribing to an event means telling us **what to do when it fires**. That is `code`: a handler we
+run on viaSocket's servers per event, with the event in `context.req.body`. Your server is not in
+the path. Most often the handler runs an action in another app the user connected — the run URL
+takes no token, the `script_id` is the credential — or calls your own API with your own auth header
+baked in. It is a string executed away from your process, so it must stand alone: no imports,
+nothing from your codebase; `axios`, `fetch` and `context` are in scope.
 
 ```js
-await user.subscribe(triggerVersionId, {
-  authId,
-  inputData,
-  code: `
-    const event = context.req.body
-    await axios.post("https://your-app.com/webhooks/viasocket", { event, user_id: "${endUserId}" })
-    return { forwarded: true }
-  `
-})
+// A string, not a function: it runs on viaSocket's servers each time the event fires.
+// In scope there: axios, fetch, context. The event the app sent is context.req.body.
+// ${…} are YOUR variables, baked in per user when you subscribe.
+const handler = `
+  const event = context.req.body
+  const response = await fetch("https://flow.sokt.io/func/${slackScriptId}", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action_version_id: "${slackSendMessageVersionId}",
+      inputData: { channel_id: "${channelPickedAtSetup}", text: "New mail from " + event.from + ": " + event.subject }
+    })
+  })
+  return await response.json()
+`
+
+await user.subscribe(gmailNewMailVersionId, { authId, inputData: {}, code: handler, meta: { user_id: uniqueIdentifier } })
 ```
+
+`webhook` is the edge case: a public, unauthenticated URL of yours that we POST every raw event to.
+Use it only when that is what you want, and never both.
+
+Some triggers are polled rather than pushed. For those, `inputData` may carry `scheduledTime`, the
+minutes between checks, as a string: `"5"` or `"15"`.
 | `user.listFlows()` | Every enabled app and subscription this user has. |
 | `user.disableFlow(scriptId)` / `user.enableFlow(scriptId)` | Turn a flow off or back on. Disabling a subscription ends it. |
 | `user.listConnections()` | Every app this user has connected. |

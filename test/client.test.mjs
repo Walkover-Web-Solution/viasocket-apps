@@ -115,7 +115,7 @@ test('subscribe sends webhook, maps hookUrl out of inputData, and insists on web
   assert.equal(result.scriptId, 'scrijuDbsudA')
   assert.equal(result.hookUrl, 'https://flow.sokt.io/func/scrijuDbsudA')
 
-  await assert.rejects(() => user.subscribe('t', { authId: 'a', inputData: {} }), /exactly one of `webhook` or `code`/)
+  await assert.rejects(() => user.subscribe('t', { authId: 'a', inputData: {} }), /exactly one of `code`/)
   await assert.rejects(() => user.subscribe('t', { authId: 'a', inputData: {}, webhook: 'w', code: 'c' }), /exactly one/)
 })
 
