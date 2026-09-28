@@ -7,10 +7,11 @@
  * that message is almost always the explanation.
  *
  * The action runner is the exception: some actions answer in that envelope, many hand back their
- * own result at the top level with no `success` or `data` key at all (Gmail's list-mails returns
- * `{ emails, nextPageToken }`). So a body only counts as an envelope when it actually carries a
- * boolean `success`; anything else is the result itself. Getting this wrong returned `undefined`
- * for every such action.
+ * own result at the top level — with no `success` or `data` key at all (Gmail's list-mails returns
+ * `{ emails, nextPageToken }`), or with a `success` key of their own and no `data` (Slack's "Find
+ * Public channel" returns `{ success, channels }`). So a body is the envelope only when it carries a
+ * boolean `success` AND a `data` key, or is a refusal (`success: false`); anything else is the
+ * result itself. Getting this wrong returned `undefined` for every such action.
  */
 
 import { ViaSocketError } from './errors.js'
@@ -45,7 +46,8 @@ export async function request<T = unknown>(options: RequestOptions): Promise<Env
     payload = text
   }
 
-  const isEnvelope = payload !== null && typeof payload === 'object' && typeof (payload as { success?: unknown }).success === 'boolean'
+  const shaped = payload !== null && typeof payload === 'object' ? (payload as { success?: unknown }) : null
+  const isEnvelope = shaped !== null && typeof shaped.success === 'boolean' && ('data' in shaped || shaped.success === false)
   const envelope = isEnvelope ? (payload as Envelope<T> & { error?: { message?: string } }) : null
   if (!response.ok || envelope?.success === false) {
     const raw = payload && typeof payload === 'object' ? (payload as { message?: string; error?: { message?: string } }) : null

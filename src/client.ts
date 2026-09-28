@@ -143,16 +143,19 @@ export class UserScope {
    * fields that paginate — so the caller always gets `{ options, offset }`.
    */
   async listOptions(actionVersionId: string, params: ListOptionsParams): Promise<ListOptionsResult> {
-    const { data } = await this.call<Option[] | { data: Option[]; offset?: string | null }>(
-      'POST',
-      `/embed/list-options/${required('actionVersionId', actionVersionId)}`,
-      {
-        fieldKey: required('fieldKey', params?.fieldKey),
-        auth_id: required('authId', params?.authId),
-        existingFields: params?.existingFields ?? {}
-      }
-    )
+    const { data } = await this.call<
+      Option[] | { data?: Option[]; offset?: string | null; response?: { status?: number | string; data?: { message?: string } } }
+    >('POST', `/embed/list-options/${required('actionVersionId', actionVersionId)}`, {
+      fieldKey: required('fieldKey', params?.fieldKey),
+      auth_id: required('authId', params?.authId),
+      existingFields: params?.existingFields ?? {}
+    })
     if (Array.isArray(data)) return { options: data, offset: null }
+    // A connection that cannot be read (revoked, or another user's auth_id) is answered with 200 and
+    // success: true, the failure nested in data. It is an error, and the message is the explanation.
+    if (data?.response && Number(data.response.status) >= 400) {
+      throw new ViaSocketError(data.response.data?.message || 'list-options failed', { status: Number(data.response.status), body: data })
+    }
     return { options: Array.isArray(data?.data) ? data.data : [], offset: data?.offset ?? null }
   }
 

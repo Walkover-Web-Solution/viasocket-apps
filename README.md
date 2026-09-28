@@ -103,7 +103,7 @@ const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc' })
 | `user.token()` | Signed embed token for that user; hand it to the frontend. |
 | `user.enable(serviceId, authId)` | Turn a connection into a `scriptId` for running actions. Once per connection. |
 | `user.findEnabled(serviceId)` | The `scriptId` if this app is already enabled, else `null`. Call before `enable`. |
-| `user.listOptions(actionVersionId, { fieldKey, authId, existingFields })` | The values a field accepts, as `{ options, offset }`. Both response shapes normalised. |
+| `user.listOptions(actionVersionId, { fieldKey, authId, existingFields })` | The values a field accepts, as `{ options, offset }`. Both response shapes normalised; an unreadable connection (revoked, another user's `auth_id`) throws a `ViaSocketError` with status 400 even though the API answers 200. |
 | `viasocket.runAction(scriptId, actionVersionId, inputData)` | Run one action. Returns the app's own response. |
 | `user.subscribe(triggerVersionId, { authId, inputData, code \| webhook, meta })` | Subscribe to an app event with a handler we run per event. Returns `{ scriptId, hookUrl, … }`. |
 | `user.updateSubscription(scriptId, { code, meta })` | Change a live subscription in place. |

@@ -80,6 +80,16 @@ test('listOptions normalises the paginated shape', async () => {
   assert.deepEqual(result, { options: [{ label: 'demo', value: '1uk1' }], offset: 'page-2' })
 })
 
+test('listOptions: a 200 whose data carries { response: { status: 400 } } is an error, not an empty list', async () => {
+  const { user } = client([ok({ response: { status: 400, data: { message: 'Auth data not found' } } })])
+  await assert.rejects(() => user.listOptions('rowj2u3wc8h5', { fieldKey: 'destination.channel_id', authId: 'authNOPE' }), (error) => {
+    assert.ok(error instanceof ViaSocketError)
+    assert.equal(error.status, 400)
+    assert.equal(error.message, 'Auth data not found')
+    return true
+  })
+})
+
 test('runAction posts to the run host with no authorization header — the script_id is the credential', async () => {
   const { viasocket, calls } = client([{ status: 200, body: { success: true, data: { name: 'Chirag', _rowNumber: 16 } } }])
   const result = await viasocket.runAction('scriRx0PKDEG', 'row5dxvkb0mr', { spreadsheet_Id: '1uk1', grid_Id: '0' })
@@ -90,6 +100,13 @@ test('runAction posts to the run host with no authorization header — the scrip
   assert.equal(call.headers.authorization, undefined)
   assert.deepEqual(JSON.parse(call.body), { action_version_id: 'row5dxvkb0mr', inputData: { spreadsheet_Id: '1uk1', grid_Id: '0' } })
   assert.deepEqual(result, { name: 'Chirag', _rowNumber: 16 })
+})
+
+test('runAction returns a bare body that carries its own success key — it is the result, not an envelope', async () => {
+  const raw = { success: true, channels: [{ id: 'C01MXRG0W3W', name: 'general' }] }
+  const { viasocket } = client([{ status: 200, body: raw }])
+  const result = await viasocket.runAction('scriyxv14Ac2', 'rowl5126q33g', { search_by: 'name', search_query: 'general' })
+  assert.deepEqual(result, raw)
 })
 
 test('subscribe sends webhook, maps hookUrl out of inputData, and insists on webhook xor code', async () => {
