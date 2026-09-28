@@ -1,0 +1,11 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Integrate apps into your product",
+      "description": "Connect any of 2,300+ apps for your end users, run actions, react to events, or mount viaSocket's prebuilt UI — through viaSocket.",
+      "skills": ["viasocket-integrations"]
+    }
+  ]
+}
