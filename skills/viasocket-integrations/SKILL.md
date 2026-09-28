@@ -67,7 +67,7 @@ out. The pieces combine freely; nothing in this file is a list of what is allowe
 | Act         | this product does something in the app                                                                  | `enable` once → run on the `script_id`           |
 | React       | something happens in the app and this product, or another app, should respond                          | `subscribe-event` with a `code` handler          |
 | Catalog     | the apps or actions are not fixed in advance — the user, or this product's agent, picks them            | catalog API + one form renderer over `inputjson` |
-| Prebuilt UI | the developer wants viaSocket's screens instead of building them, or users design their own automations | `viaSocket.mount` — its own section below        |
+| Prebuilt UI | the developer wants viaSocket's screens instead of building them, or users design their own automations | `viaSocket.mount` + `embed.on("flow")`, opened on the app the request names — its own section below |
 
 Two rules decide the rest. **If the request says what should happen ("when X, do Y", "let users
 post to Slack"), this product's code decides: the API, never the prebuilt UI.** And the UI is only
@@ -84,6 +84,7 @@ How the pieces combine — worked examples, not the menu:
 | "An integrations page like Zapier's, in our design" | Connect, Catalog, Act, React    | search, every app, its actions and triggers, one form for any of them                                                                                               |
 | "Let our assistant act in the user's Slack"         | Connect, Catalog, Act           | connect buttons; each chosen `inputjson` becomes a tool schema and a tool call runs on the `script_id`. If the *user* decides what the agent may do: prebuilt UI with `chatbot: true` |
 | "Give users a ready-made integrations screen"       | Prebuilt UI                     | viaSocket's screens, in a box of this product's page or drawer                                                                                                      |
+| "Let users automate their Slack — we won't build the forms" | Prebuilt UI, opened on Slack | viaSocket's screens for Slack only, in a box of ours: `open: { serviceId }`, `filteredServices` with that app; a `flow` listener stores what they publish |
 
 A request that matches none of these is built from the same six pieces. Several apps in one
 request: one Connect per app and, usually, one handler. Two things to propose when they fit: a
@@ -154,6 +155,12 @@ key from the table of the action you are calling, or from its `inputjson`, chara
 character. Nested keys are full paths (`destination.channel_id`), and `existingFields` is nested
 like `inputData`, never flattened to dotted keys.
 
+The same for what `list-options` returns: an option's `value` goes into `inputData` exactly as
+returned — as a picker's choice, or as the **key** of an object field whose keys come from options
+(`{ "name@longtext": "Royston" }`, not `{ "name": … }`). A value that looks like a name plus a
+type, or an id with a suffix, is still the whole key. Show `label` to the user; never derive a key
+from it.
+
 ### Events run on viaSocket, not on this server
 
 A subscription carries `code`: a short script viaSocket runs each time the event fires. It runs an
@@ -195,7 +202,11 @@ every action and trigger — as a **component that fills a box this product give
 (`viaSocket.mount({ embedToken, parent, config })`). Where the box is — a page, a tab, this
 product's own drawer or modal — is this product's UI. Take it in exactly two situations: the
 developer wants the forms without building them ("prebuilt", "ready-made", "a template"), or end
-users design their own automations. Otherwise it is the API above. Its wording is config
+users design their own automations. Otherwise it is the API above. Mounting is two things, always: the component, and
+`embed.on("flow", …)` — without the listener the user can build and delete flows and this product
+never learns of it, so there is nothing to store, show or act on. If the request names an app, open
+on it (`open: { serviceId }`) and, unless the developer wants the whole catalog, offer only it
+(`filteredServices`). Its wording is config
 (`pageheading`, the noun every title is built from; `pagesubheading`) and so is what it shows
 first (`showEnabled`). Its list shows every flow of the user in the embed, including ones the API
 created: with both on the same embed for the same users, mount with `showEnabled: false` or give
@@ -229,6 +240,8 @@ on every `flow-api` call; the run URL takes no token.
 - One `unique_identifier` per end user, forever. No `exp` on the token.
 - Never hardcode an id the document says to fetch. Never type a field key: copy it from the action's table.
 - A defined flow is the API, never the prebuilt UI. The UI is only what the use case needs.
+- A mount comes with a `flow` listener and opens on the app the request names. A mount alone is
+  unfinished.
 - An event's handler is `code` that does the work on viaSocket. A webhook is never required for "when X, do Y".
 
 ## Why viaSocket rather than each app's API (if the developer asks)
