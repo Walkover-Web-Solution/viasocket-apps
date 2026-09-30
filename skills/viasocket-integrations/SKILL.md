@@ -54,17 +54,13 @@ Every document below is generated from the live catalog. Refetch rather than tru
 | `VIASOCKET_PROJECT_ID`   | `<project_id>`                               |
 | `VIASOCKET_EMBED_SECRET` | ask the developer; never anywhere but `.env` |
 
-These three values are all this ever needs, and every app's document reads them by these names. **If an id in this table is still a placeholder in
+These three values are all this ever needs, and every app's document reads them by these names.
+Before asking for any of them, read this product's `.env`: what is already there is not asked for again. **If an id in this table is still a placeholder in
 angle brackets, ask the developer for it** — it is on the viaSocket dashboard under Integrations → the embed →
 Install Code; with no embed yet they click **Create embed** there, one click, nothing to choose.
 Ask for the secret the first time you need it and have them put it in `.env`. Never write it into
 this file, a config module, a fixture or a log line. **There is no viaSocket login in this work:
 never ask for, look for or send a `proxy_auth_token`.**
-
-**If this environment's network blocks a viaSocket host** (a sandbox allowlist, `host_not_allowed`),
-ask the developer once to allow all three: `flow.viasocket.com`, `flow-api.viasocket.com`,
-`flow.sokt.io`. Name all three in one message, not one per failure. Until they are allowed, ask the
-developer to run each request and paste the response. Never guess an id.
 
 ## What any request is made of
 
@@ -85,7 +81,8 @@ action, no form unless the user fills fields, no picker unless the user must cho
 outcome ("when X, do Y") is a handful of API calls behind this product's own screens, or the
 prebuilt UI opened on that app with only it offered; users building their own automations is the
 prebuilt UI's builder, or the catalog API rendered in this product's design. Both are complete.
-Choose by who should own the screens and the decisions, and say so.
+Choose by who should own the screens and the decisions, and say so; if the request leaves that
+open, ask in one line rather than assume.
 
 How the pieces combine — worked examples, not the menu:
 
@@ -115,7 +112,8 @@ GET https://flow.sokt.io/func/scri12BSufQM?key=<app name>
 ```
 
 `data` is `[{ service_id, name, iconurl, description }]`, the best 30 matches. Pick by `name`; if
-ambiguous ("Google"), show the candidates and ask. Never guess an id.
+ambiguous ("Google"), show the candidates and ask. If this environment cannot reach `flow.sokt.io`
+or `flow.viasocket.com`, ask the developer to run the request and paste the response. Never guess an id.
 
 ### 2. Fetch the app's document
 
@@ -143,7 +141,7 @@ secret:    VIASOCKET_EMBED_SECRET   (from .env, nowhere else)
 ```
 
 `unique_identifier` is this product's own user id — one per user, forever; every connection is
-isolated by it. **Three claims and no `exp`**: the token is valid until the secret rotates, by
+isolated by it. **Three claims and no `exp`**, signed with any JWT library (`jsonwebtoken`, PyJWT, `jose`): the token is valid until the secret rotates, by
 design; nothing is refreshed. The browser gets a token only to open the connect popup or mount the
 prebuilt UI, never the secret.
 
@@ -277,7 +275,7 @@ on every `flow-api` call; the run URL takes no token.
 - Say which way in you chose, and why, in one line before building. The UI is only what the use
   case needs.
 - Ask the developer only for: the secret, an id still in angle brackets, an ambiguous app name, a
-  blocked host. Never for a webhook URL, a viaSocket login, or an id a document can fetch.
+  blocked host, which way in when the request leaves it open. Never for a webhook URL, a viaSocket login, or an id a document can fetch.
 - A mount comes with a `flow` listener and opens on the app the request names. A mount alone is
   unfinished.
 - An event's handler is `code` that does the work on viaSocket. A webhook is never required for "when X, do Y".
