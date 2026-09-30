@@ -33,17 +33,6 @@ connections, same token, same flows; nothing one creates is hidden from the othe
 can use both. They differ in who draws the screens and who decides what a flow does. Choose by what
 the request asks for, and say which and why in one line before building.
 
-| You can                                | How                                                                                                        | The end user sees            |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Connect an app                         | A popup with the app's own sign-in; you get an `auth_id`                                                   | Your Connect button          |
-| Fill a picker with their real data     | `list-options`: their channels, sheets, boards — searchable                                                | Your dropdown                |
-| Do something in the app                | Run an action on their `script_id`, no token needed                                                        | Your form, your button       |
-| React to something in the app          | Subscribe to a trigger with a **handler**: JavaScript viaSocket runs per event — no server, nothing public | A toggle, or nothing         |
-| Chain apps                             | The handler runs another app's action                                                                      | One toggle                   |
-| Put every app in your UI               | The catalog API lists apps and every action's schema; one form renderer serves all                         | Your integrations page       |
-| Give your AI agent tools in their apps | An action's schema is a tool definition; a tool call runs it on the user's `script_id`                     | Your assistant, acting       |
-| Skip building the forms                | The **prebuilt UI**: a component with every app's forms, in a box of your page                             | Our screen, inside your page |
-
 Every document below is generated from the live catalog. Refetch rather than trust a copy.
 
 ## Your workspace
@@ -159,7 +148,17 @@ prebuilt UI, never the secret.
    and save the subscription record the document describes (the response is the subscription's
    own `script_id` — a different one from the app's).
 
-Test with a real call before saying it works. Report what actually came back.
+### Before you say it works
+
+Run it for real — the action, or the event fired once — and show the response that came back,
+not the code that should produce it. Then tell the developer what the code does not say: the
+token never expires, so a leaked one is answered by rotating the secret, which invalidates every
+token; a handler lives on viaSocket, so changing it is `update-subscribed-event`, not a deploy;
+the secret and every `script_id` are server-side credentials. When a call fails: 401 is the token
+— the secret, the ids, or a token signed in the browser; a 200 whose `data.response.status` is
+400 is a connection that cannot be read (revoked, or another user's `auth_id`); an empty options
+list is a wrong field key or a missing `existingFields` value; a 404 document is an app with
+nothing published.
 
 ### Field keys: copy, never type
 
@@ -238,6 +237,10 @@ modal. Same ids, same token; nothing extra is created. Everything it shows and d
 - **Tools for this product's agent.** `chatbot: true`: the user marks the fields the assistant
   fills each run, and every published flow arrives with `openaiToolJson` and `mcpToolJson`;
   `llm_referring_text` names the assistant on that checkbox.
+- **Its users are this product's users.** Unless the request says they are developers:
+  `pageheading` is the product's own word for these things, `hideApi`, `hideFunction` and
+  `hideWebhook` keep the developer cards out, and `llm_referring_text` names the assistant they
+  know.
 
 What comes back: `embed.on("flow", …)` fires `initiated`, `published`, `updated`, `paused` and
 `deleted` with the flow's id, title, run URL and, in agent mode, its tool JSON. Without the
