@@ -33,7 +33,8 @@ connections, same token, same flows; nothing one creates is hidden from the othe
 can use both. They differ in who draws the screens and who decides what a flow does. Choose by what
 the request asks for, and say which and why in one line before building.
 
-Every document below is generated from the live catalog. Refetch rather than trust a copy.
+Every document below is generated from the live catalog: keep the copy you download, and refetch
+it when an id or a call in it fails.
 
 ## Your workspace
 
@@ -50,6 +51,11 @@ Install Code; with no embed yet they click **Create embed** there, one click, no
 Ask for the secret the first time you need it and have them put it in `.env`. Never write it into
 this file, a config module, a fixture or a log line. **There is no viaSocket login in this work:
 never ask for, look for or send a `proxy_auth_token`.**
+
+**If this environment's network blocks a viaSocket host** (a sandbox allowlist, `host_not_allowed`),
+ask the developer once to allow all three: `flow.viasocket.com`, `flow-api.viasocket.com`,
+`flow.sokt.io`. Name all three in one message, not one per failure. Until they are allowed, ask the
+developer to run each request and paste the response. Never guess an id.
 
 ## What any request is made of
 
@@ -90,7 +96,8 @@ request: one Connect per app and, usually, one handler. Two things to propose wh
 handler with **no app on the far side** (transform, filter, fan out, call this product's own API
 with its own auth header — ordinary JavaScript running on viaSocket); and, for an app **not in the
 catalog** — the developer's own product or a private API — a connector built once in Plug Builder
-(Developer section of the dashboard), never a hand-rolled HTTP client here.
+(Developer section of the dashboard — the developer's task there, not code here), never a
+hand-rolled HTTP client.
 
 ## Build, in four steps
 
@@ -101,8 +108,7 @@ GET https://flow.sokt.io/func/scri12BSufQM?key=<app name>
 ```
 
 `data` is `[{ service_id, name, iconurl, description }]`, the best 30 matches. Pick by `name`; if
-ambiguous ("Google"), show the candidates and ask. If this environment cannot reach `flow.sokt.io`
-or `flow.viasocket.com`, ask the developer to run the request and paste the response. Never guess an id.
+ambiguous ("Google"), show the candidates and ask. Never guess an id.
 
 ### 2. Fetch the app's document
 
@@ -113,8 +119,8 @@ GET https://flow.viasocket.com/documentation/<service_id>.md?format=http&org=<or
 `format=sdk` instead for a Node 20+ backend using the `viasocket-apps` package. 404 means the app
 has no published actions or triggers: say so and stop. Download it exactly (`curl -fsSL … -o`)
 beside this file (`.claude/skills/viasocket-<app>/SKILL.md` or your agent's equivalent): a fetch
-tool that summarises loses ids and keys. It is long — Slack's is 60 KB — so read Step 1, the one
-action or trigger you use, and the field index; open the rest when you need it. It carries
+tool that summarises loses ids and keys. It is long — Slack's is 60 KB — so read its Step 1 (the connect
+button), the one action or trigger you use, and the field index; open the rest when you need it. It carries
 every action and trigger with its `action_version_id`, every field with its type and whether it is
 required or fetched, a field index for pickers, a sample `inputData` per event, both handler
 templates, and a troubleshooting table. Where this file and that one differ, the app's document wins.
@@ -140,10 +146,12 @@ prebuilt UI, never the secret.
 2. A token endpoint on this product's backend. Prove it once: `GET https://flow-api.viasocket.com/embed/authentications`
    with a token → 200 and a list, empty until someone connects. 401 is the secret or the ids; fix
    that before any UI.
-3. A connect button per app, as the document's Step 1 shows. Store each `auth_id`.
-4. Enable an app **only if the product runs its actions**: once per user and app, look up first,
-   store the app's `script_id` like a password. An event needs only its `auth_id`.
-5. Pickers for the fields the end user must choose, from the document's field index. Store the choice.
+3. A connect button per app, as the document's Step 1 (the connect button) shows. Store each `auth_id`.
+4. Enable an app **only if the product runs its actions**: once per user and app — check this product's
+   own store first — and keep the app's `script_id` like a password. An event needs only its `auth_id`.
+5. Pickers for the fields the end user must choose, from the document's field index: `list-options`
+   takes the `action_version_id` of the action the field belongs to and the `auth_id`, nothing
+   enabled. Store the choice.
 6. Actions: `inputData` shaped as the document's sample. Events: subscribe once, with a handler,
    and save the subscription record the document describes (the response is the subscription's
    own `script_id` — a different one from the app's).
@@ -209,11 +217,23 @@ https://flow.viasocket.com/documentation/catalog-api.md
 https://flow.viasocket.com/documentation/form-renderer.md
 ```
 
+### Tools for this product's agent, through the API
+
+An action is a tool: `name` from the action's name (letters, digits and underscores),
+`description` from its description, `parameters` a JSON schema built from its `inputjson` — the
+field types and `required` flags are in the form-renderer document — with the fixed values (the
+channel the user picked) baked in rather than exposed. A tool call is the run call on the user's
+app `script_id` with the model's arguments as `inputData`. A field whose values come from
+`list-options` is resolved from `label` to `value` before running, or offered to the model as an
+enum fetched when the tool is built. If the end user should decide which actions the agent may
+use and fill the fixed values themselves, the prebuilt UI with `chatbot: true` does all of this
+and hands back the tool JSON.
+
 ## The prebuilt UI
 
 viaSocket's screens as a **component that fills a box this product gives it** —
-`viaSocket.mount({ embedToken, parent, config })` — a page, a tab, this product's own drawer or
-modal. Same ids, same token; nothing extra is created. Everything it shows and does, set from code:
+`const embed = viaSocket.mount({ embedToken, parent, config, open })` — a page, a tab, this
+product's own drawer or modal. Same ids, same token; nothing extra is created. Everything it shows and does, set from code:
 
 - **Every app, or a chosen set.** The catalog with search, or only the apps and events in
   `filteredServices`; `categories`; `hideApps` for none of them. The user connects inside it.
@@ -243,7 +263,8 @@ modal. Same ids, same token; nothing extra is created. Everything it shows and d
   know.
 
 What comes back: `embed.on("flow", …)` fires `initiated`, `published`, `updated`, `paused` and
-`deleted` with the flow's id, title, run URL and, in agent mode, its tool JSON. Without the
+`deleted` with the flow's id, title, run URL (a credential: pass it to this product's server, keep it
+there) and, in agent mode, its tool JSON. Without the
 listener this product never learns what the user built, so a mount always comes with one. Every
 key, the events' full shape and what to store:
 
@@ -256,23 +277,24 @@ https://flow.viasocket.com/documentation/embed.md?org=<org_id>&project=<project_
 Each app's document spells these out with that app's ids and fields. `authorization: <embed token>`
 on every `flow-api` call; the run URL takes no token.
 
-| Call                                         | Request                                                                                                                                     | Returns                                                                                                                                        |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Connect (browser)                            | `openViasocketConnection(embedToken, service_id)` from `https://embed.viasocket.com/prod-connectcomponent.js`                               | `message` event `viasocket_connection_success`; `event.data.data.id` is the `auth_id`                                                          |
-| Enable — once per user and app, actions only | `POST https://flow-api.viasocket.com/embed/enable/<service_id>/<auth_id>`, empty body                                                       | `data.script_id` — the app's runner for this user                                                                                              |
-| Options for one field                        | `POST https://flow-api.viasocket.com/embed/list-options/<action_version_id>` `{ fieldKey, auth_id, existingFields }`                        | `data` is the array, or `{ data: [...], offset }` for a field that pages; an unreadable connection answers 200 with `data.response.status` 400 |
-| Run an action                                | `POST https://flow.sokt.io/func/<script_id>` `{ action_version_id, inputData }`                                                             | `{ success, data }`, or the action's own body when it has no `data` key                                                                        |
-| Subscribe to a trigger                       | `POST https://flow-api.viasocket.com/embed/subscribe-event/<trigger_version_id>` `{ auth_id, inputData, code: "<handler>", meta }`          | `data.script_id` — this subscription's own id; save it with the inputData and the handler                                                      |
-| Change a live handler                        | `PUT https://flow-api.viasocket.com/embed/update-subscribed-event/<subscription script_id>` `{ code }`                                      | —                                                                                                                                              |
-| Pause / resume                               | `PUT https://flow-api.viasocket.com/embed/updatestatus/<script_id>?status=0` (`1` resumes)                                                  | `data.status`                                                                                                                                  |
-| The user's flows                             | `GET https://flow-api.viasocket.com/projects/<project_id>/integrations`                                                                     | `data.flows[]` `{ id, service_id, status, webhook }` — `id` is the `script_id`                                                                 |
-| Connections / disconnect                     | `GET https://flow-api.viasocket.com/embed/authentications` · `DELETE https://flow-api.viasocket.com/embed/authentications/revoke/<auth_id>` | —                                                                                                                                              |
+| Call                                         | Request                                                                                                                                         | Returns                                                                                                                                              |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connect (browser)                            | `openViasocketConnection(embedToken, service_id)` from `https://embed.viasocket.com/prod-connectcomponent.js`                                   | `message` event `viasocket_connection_success`; `event.data.data.id` is the `auth_id`                                                                |
+| Enable — once per user and app, actions only | `POST https://flow-api.viasocket.com/embed/enable/<service_id>/<auth_id>`, empty body                                                           | `data.script_id` — the app's runner for this user                                                                                                    |
+| Options for one field                        | `POST https://flow-api.viasocket.com/embed/list-options/<action_version_id>` `{ fieldKey, auth_id, existingFields }`                            | `data` is the array, or `{ data: [...], offset }` for a field that pages; an unreadable connection answers 200 with `data.response.status` 400       |
+| Run an action                                | `POST https://flow.sokt.io/func/<script_id>` `{ action_version_id, inputData }`                                                                 | `{ success, data }`, or the action's own body when it has no `data` key                                                                              |
+| Subscribe to a trigger                       | `POST https://flow-api.viasocket.com/embed/subscribe-event/<trigger_version_id>` `{ auth_id, inputData, code: "<handler>", meta: { user_id } }` | `data.script_id` — this subscription's own id; save it with the inputData and the handler. `meta` is this product's own tags, returned with the flow |
+| Change a live handler                        | `PUT https://flow-api.viasocket.com/embed/update-subscribed-event/<subscription script_id>` `{ code }`                                          | —                                                                                                                                                    |
+| Pause / resume                               | `PUT https://flow-api.viasocket.com/embed/updatestatus/<script_id>?status=0` (`1` resumes; either kind of `script_id`)                          | `data.status`                                                                                                                                        |
+| The user's flows                             | `GET https://flow-api.viasocket.com/projects/<project_id>/integrations`                                                                         | `data.flows[]` `{ id, service_id, status, webhook }` — `id` is the `script_id`                                                                       |
+| Connections / disconnect                     | `GET https://flow-api.viasocket.com/embed/authentications` · `DELETE https://flow-api.viasocket.com/embed/authentications/revoke/<auth_id>`     | —                                                                                                                                                    |
 
 ## Rules
 
 - Three values in `.env`: `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET`. Ask
   for what is missing; never search for it.
-- The secret and every `script_id` stay on the server. Never in a committed file, never in a browser.
+- The secret and every `script_id` stay on the server. Never in a committed file, never in a browser;
+  a run URL the prebuilt UI hands the page goes straight to this product's server.
 - One `unique_identifier` per end user, forever. No `exp` on the token.
 - Never hardcode an id the document says to fetch. Never type a field key: copy it from the action's table.
 - Say which way in you chose, and why, in one line before building. The UI is only what the use
