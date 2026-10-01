@@ -41,6 +41,21 @@ export interface ConnectOptions {
   serviceId: string
   /** Where the connect script is served from. Only override for a non-production environment. */
   scriptUrl?: string
+  /**
+   * The actions and triggers this product will use, by their `rowid` (listed with each action in
+   * the app's document, and as `rowid` on every row of the catalog API). The popup then offers only
+   * those and asks the user for their scopes alone. Omitted, every action of the app is offered and
+   * the user may grant all of them.
+   */
+  actions?: string[]
+  /** With `actions`: skip the list and open the app's own consent screen straight away. */
+  skipActionSelection?: boolean
+}
+
+/** The third argument of the connect script's `openViasocketConnection()`. */
+interface ConnectScriptOptions {
+  filteredActions?: string[]
+  skipActionSelection?: boolean
 }
 
 export interface ConnectResult {
@@ -53,7 +68,7 @@ export interface ConnectResult {
 
 declare global {
   interface Window {
-    openViasocketConnection?: (embedToken: string, serviceId: string) => void
+    openViasocketConnection?: (embedToken: string, serviceId: string, options?: ConnectScriptOptions) => unknown
   }
 }
 
@@ -132,6 +147,9 @@ export async function connect(options: ConnectOptions): Promise<ConnectResult> {
     }
 
     window.addEventListener('message', onMessage)
-    open(options.embedToken, serviceId)
+    const scriptOptions: ConnectScriptOptions = {}
+    if (options.actions?.length) scriptOptions.filteredActions = [...options.actions]
+    if (options.skipActionSelection) scriptOptions.skipActionSelection = true
+    open(options.embedToken, serviceId, scriptOptions)
   })
 }

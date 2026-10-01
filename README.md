@@ -88,7 +88,15 @@ const subscription = await user.subscribe(triggerVersionId, {
 import { connect } from 'viasocket-apps/browser'
 
 // embedToken comes from your backend (user.token()), signed for the signed-in user.
-const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc' })
+const { authId } = await connect({
+  embedToken,
+  serviceId: 'rowbu58rc',
+  // Optional: the rowids of the actions and triggers you use (listed with each action in the
+  // app's document). The popup then asks only for their scopes; skipActionSelection goes
+  // straight to the app's consent screen. Omit both to offer every action of the app.
+  actions: ['<action rowid>'],
+  skipActionSelection: true
+})
 // Send authId to your backend, which enables the app and stores the script_id.
 ```
 
