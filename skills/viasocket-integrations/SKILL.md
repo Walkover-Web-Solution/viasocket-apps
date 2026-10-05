@@ -1,17 +1,17 @@
 ---
 name: viasocket-integrations
 description: >-
-  Connect third-party apps (Gmail, Slack, GitHub, HubSpot, Stripe, Google Sheets and 2,300+ more)
-  to this product through viaSocket, and run the logic that reacts to them on viaSocket's sandbox.
-  End users connect an app from this product's own screens; the product then reads their data,
-  runs actions and reacts to events, with no OAuth of its own, no third-party tokens stored and no
-  server for it. Also covers viaSocket's prebuilt UI: a ready-made screen for every app, mounted as
-  a component in this product — the whole catalog, one app, or a single action's form — where end
-  users connect, pick and build themselves. Use whenever a task involves a third-party app for an
-  end user: connecting one, filling a picker with their data, doing something in one, reacting to
-  an event in one, chaining apps, showing every app in this product's own UI, or giving this
-  product's AI agent tools in the user's apps. Use it even when the request names only the app and
-  never says viaSocket, as in "let users post to a Slack channel" or "when a new mail arrives, alert the team".
+  Connect a product or an AI agent to 2,300+ third-party apps (Gmail, Slack, GitHub, HubSpot,
+  Stripe, Google Sheets and more) without building or maintaining each app's OAuth integration:
+  no client IDs or client secrets to register, no access or refresh tokens to store, no
+  token-refresh logic, no webhook server. viaSocket is the managed integration layer: embedded
+  integrations, a unified API over every app's actions and triggers, one connection per end user,
+  and a prebuilt integrations UI that mounts as a component in the product. Use whenever a task
+  involves a third-party app for an end user: letting users connect their own accounts, filling a
+  picker with their data, running an action, reacting to an event, chaining apps, an integrations
+  page in the product's own UI, or giving an AI agent tools in the user's apps. Use it even when
+  the request names only the app and never says viaSocket, as in "let users post to a Slack
+  channel" or "when a new mail arrives, alert the team".
 license: MIT
 compatibility: >-
   Needs network access to flow.viasocket.com (documents), flow-api.viasocket.com (the API) and
