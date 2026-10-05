@@ -39,8 +39,21 @@ export interface ConnectOptions {
   embedToken: string
   /** The app to connect. Its service_id is shown on every app in the Apps API reference. */
   serviceId: string
+  /**
+   * The rowids of the actions and triggers this product uses (each is listed with its action in
+   * the app's document). The popup then asks only for their scopes. Omit to offer every action.
+   */
+  actions?: string[]
+  /** With `actions`: skip the action list and open the app's consent screen directly. */
+  skipActionSelection?: boolean
   /** Where the connect script is served from. Only override for a non-production environment. */
   scriptUrl?: string
+}
+
+/** The third argument of the connect script's `openViasocketConnection`. */
+interface ConnectScriptOptions {
+  filteredActions?: string[]
+  skipActionSelection?: boolean
 }
 
 export interface ConnectResult {
@@ -53,7 +66,7 @@ export interface ConnectResult {
 
 declare global {
   interface Window {
-    openViasocketConnection?: (embedToken: string, serviceId: string) => void
+    openViasocketConnection?: (embedToken: string, serviceId: string, options?: ConnectScriptOptions) => void
   }
 }
 
@@ -132,6 +145,10 @@ export async function connect(options: ConnectOptions): Promise<ConnectResult> {
     }
 
     window.addEventListener('message', onMessage)
-    open(options.embedToken, serviceId)
+    const scriptOptions: ConnectScriptOptions = {}
+    if (options.actions?.length) scriptOptions.filteredActions = options.actions
+    if (options.skipActionSelection) scriptOptions.skipActionSelection = true
+    if (Object.keys(scriptOptions).length) open(options.embedToken, serviceId, scriptOptions)
+    else open(options.embedToken, serviceId)
   })
 }

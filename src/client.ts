@@ -12,11 +12,15 @@ import { ViaSocketError } from './errors.js'
 import { request } from './http.js'
 import { signEmbedToken } from './token.js'
 import type {
+  CatalogApp,
+  CatalogVersion,
+  CatalogVersions,
   EnableResult,
   Envelope,
   Flow,
   FlowStatus,
   ListOptionsParams,
+  ListAppsParams,
   ListOptionsResult,
   Option,
   SubscribeParams,
@@ -27,6 +31,14 @@ import type {
 
 const DEFAULT_API_BASE_URL = 'https://flow-api.viasocket.com'
 const DEFAULT_RUN_BASE_URL = 'https://flow.sokt.io'
+
+/** The public catalog: no token, the same data in every environment. */
+const CATALOG = {
+  search: 'https://flow.sokt.io/func/scri12BSufQM',
+  list: 'https://plug-service.viasocket.com/api/v1/plugins/all',
+  versions: 'https://flow.sokt.io/func/scriolZue69X'
+}
+const LIST_LIMIT_MAX = 200
 
 function required(name: string, value: string | undefined): string {
   if (typeof value !== 'string' || !value.trim()) throw new ViaSocketError(`${name} is required`, { status: null })
@@ -57,6 +69,67 @@ export class ViaSocket {
     }
     // Bound so a bare `fetch` reference still has the right `this` on runtimes that care.
     this.transport = options.fetch ? transport : transport.bind(globalThis)
+  }
+
+  /**
+   * The catalog: which apps exist and what each can do. Public, no token, nothing per user — so
+   * it lives on the root client and is safe to call from a browser too.
+   */
+  readonly catalog = {
+    /** The best 30 apps for what the user typed. A type-ahead: an empty key returns nothing. */
+    search: async (key: string): Promise<CatalogApp[]> => {
+      const url = `${CATALOG.search}?key=${encodeURIComponent(required('key', key))}`
+      const { data } = await request<Array<Record<string, string>>>({ method: 'GET', url, fetchImpl: this.transport })
+      return (Array.isArray(data) ? data : []).map((row) => ({
+        serviceId: row.service_id,
+        name: row.name,
+        description: row.description ?? '',
+        iconUrl: row.iconurl ?? ''
+      }))
+    },
+    /**
+     * Every app, most used first, a page at a time (200 at most). An empty page ends it. The list
+     * is the whole table — far down it holds apps with nothing published — so a grid drops every
+     * app whose `versions()` comes back empty.
+     */
+    list: async (params: ListAppsParams = {}): Promise<CatalogApp[]> => {
+      const query = new URLSearchParams({
+        limit: String(Math.min(Math.max(1, params.limit ?? LIST_LIMIT_MAX), LIST_LIMIT_MAX)),
+        offset: String(Math.max(0, params.offset ?? 0))
+      })
+      if (params.category) query.set('category', params.category)
+      // The body is `{ message, data: [...] }` with no `success` key, so it is not the envelope and
+      // arrives whole as `data`.
+      const { data } = await request<{ data?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>({
+        method: 'GET',
+        url: `${CATALOG.list}?${query}`,
+        fetchImpl: this.transport
+      })
+      const rows = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : []
+      return rows.map((row) => ({
+        serviceId: String(row.rowid ?? ''),
+        name: String(row.name ?? ''),
+        description: String(row.description ?? ''),
+        iconUrl: String(row.iconurl ?? ''),
+        category: Array.isArray(row.category) ? (row.category as string[]) : [],
+        domain: typeof row.domain === 'string' ? row.domain : undefined
+      }))
+    },
+    /**
+     * Every published action and trigger of one app, with the schema (`inputjson`) a form is
+     * rendered from and the version id the run and subscribe calls take. Empty for an app with
+     * nothing published. Cache it per app; ids are stable and schemas change rarely.
+     */
+    versions: async (serviceId: string): Promise<CatalogVersions> => {
+      const { data } = await request<CatalogVersion[]>({
+        method: 'POST',
+        url: CATALOG.versions,
+        body: JSON.stringify({ service_id: required('serviceId', serviceId) }),
+        fetchImpl: this.transport
+      })
+      const rows = Array.isArray(data) ? data : []
+      return { actions: rows.filter((row) => row.type === 'action'), triggers: rows.filter((row) => row.type === 'trigger') }
+    }
   }
 
   /** Everything that is done for one of your end users. */

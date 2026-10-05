@@ -213,3 +213,40 @@ test('a non-2xx with an un-enveloped body still surfaces its message', async () 
   const { viasocket } = client([{ status: 500, body: { message: 'script crashed' } }])
   await assert.rejects(viasocket.runAction('scri1', 'row1', {}), (error) => error.status === 500 && /script crashed/.test(error.message))
 })
+
+// ---------------------------------------------------------------- the catalog: public, no token, normalised shapes
+
+test('catalog.search GETs the search function with the key encoded and no authorization header', async () => {
+  const { viasocket, calls } = client([{ status: 200, body: { success: true, data: [{ service_id: 'rowbu58rc', name: 'Slack', iconurl: 'i', description: 'd' }] } }])
+  const apps = await viasocket.catalog.search('sla ck')
+  assert.equal(calls[0].url, 'https://flow.sokt.io/func/scri12BSufQM?key=sla%20ck')
+  assert.equal(calls[0].headers.authorization, undefined)
+  assert.deepEqual(apps, [{ serviceId: 'rowbu58rc', name: 'Slack', description: 'd', iconUrl: 'i' }])
+})
+
+test('catalog.list pages the full table, caps the limit at 200, and maps rowid to serviceId', async () => {
+  const row = { rowid: 'rowxzmscatfe', name: 'Microsoft Teams', description: 'd', iconurl: 'i', category: ['Communication'], domain: 'teams.live.com', brandcolor: '#0078D4' }
+  const { viasocket, calls } = client([{ status: 200, body: { message: 'successfully get plugins data', data: [row] } }])
+  const apps = await viasocket.catalog.list({ limit: 500, offset: 400, category: 'CRM' })
+  assert.equal(calls[0].url, 'https://plug-service.viasocket.com/api/v1/plugins/all?limit=200&offset=400&category=CRM')
+  assert.deepEqual(apps, [{ serviceId: 'rowxzmscatfe', name: 'Microsoft Teams', description: 'd', iconUrl: 'i', category: ['Communication'], domain: 'teams.live.com' }])
+})
+
+test('catalog.versions POSTs the service_id and splits the bare array into actions and triggers', async () => {
+  const rows = [
+    { actionversionrecordid: 'a1', type: 'action', name: 'Send Message', inputjson: {} },
+    { actionversionrecordid: 't1', type: 'trigger', name: 'New Mention', inputjson: {} }
+  ]
+  const { viasocket, calls } = client([{ status: 200, body: rows }])
+  const { actions, triggers } = await viasocket.catalog.versions('rowbu58rc')
+  assert.equal(calls[0].method, 'POST')
+  assert.equal(calls[0].url, 'https://flow.sokt.io/func/scriolZue69X')
+  assert.deepEqual(JSON.parse(calls[0].body), { service_id: 'rowbu58rc' })
+  assert.deepEqual(actions.map((r) => r.name), ['Send Message'])
+  assert.deepEqual(triggers.map((r) => r.name), ['New Mention'])
+})
+
+test('catalog.versions is empty, not an error, for an app with nothing published', async () => {
+  const { viasocket } = client([{ status: 200, body: [] }])
+  assert.deepEqual(await viasocket.catalog.versions('rowzwz91vwaw'), { actions: [], triggers: [] })
+})

@@ -109,6 +109,47 @@ export interface Flow {
 export type FlowStatus = 0 | 1
 
 /** The envelope every viaSocket endpoint answers with. */
+/** One app of the catalog, from a search or the full list. */
+export interface CatalogApp {
+  /** The `service_id` every other call takes. */
+  serviceId: string
+  name: string
+  description: string
+  iconUrl: string
+  /** Only the full list carries these. */
+  category?: string[]
+  domain?: string
+}
+
+export interface ListAppsParams {
+  /** Up to 200, the API's cap. */
+  limit?: number
+  offset?: number
+  /** One of the catalog's category names, e.g. "CRM". */
+  category?: string
+}
+
+/** One published action or trigger version of an app, as the catalog returns it. */
+export interface CatalogVersion {
+  /** The `action_version_id` (or trigger version id) the run and subscribe calls take. */
+  actionversionrecordid: string
+  type: 'action' | 'trigger' | string
+  name: string
+  description: string
+  /** The field schema a form is rendered from; `inputData` follows it. */
+  inputjson: Record<string, unknown>
+  sampledata?: unknown
+  pluginrecordid?: string
+  iconurl?: string
+  authtype?: string
+  [key: string]: unknown
+}
+
+export interface CatalogVersions {
+  actions: CatalogVersion[]
+  triggers: CatalogVersion[]
+}
+
 export interface Envelope<T = unknown> {
   success: boolean
   message?: string

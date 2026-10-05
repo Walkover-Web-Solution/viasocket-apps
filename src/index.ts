@@ -20,10 +20,14 @@ export { ViaSocketError } from './errors.js'
 export { signEmbedToken } from './token.js'
 export type { SignEmbedTokenInput } from './token.js'
 export type {
+  CatalogApp,
+  CatalogVersion,
+  CatalogVersions,
   EnableResult,
   Envelope,
   Flow,
   FlowStatus,
+  ListAppsParams,
   ListOptionsParams,
   ListOptionsResult,
   Option,
