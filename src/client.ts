@@ -12,8 +12,10 @@ import { ViaSocketError } from './errors.js'
 import { request } from './http.js'
 import { signEmbedToken } from './token.js'
 import type {
+  CatalogAction,
   CatalogApp,
-  CatalogVersion,
+  CatalogService,
+  CatalogTrigger,
   CatalogVersions,
   EnableResult,
   Envelope,
@@ -36,7 +38,7 @@ const DEFAULT_RUN_BASE_URL = 'https://flow.sokt.io'
 const CATALOG = {
   search: 'https://flow.sokt.io/func/scri12BSufQM',
   list: 'https://plug-service.viasocket.com/api/v1/plugins/all',
-  versions: 'https://flow.sokt.io/func/scriolZue69X'
+  versions: 'https://flow.sokt.io/func/scriK4LFg2kc'
 }
 const LIST_LIMIT_MAX = 200
 
@@ -116,19 +118,30 @@ export class ViaSocket {
       }))
     },
     /**
-     * Every published action and trigger of one app, with the schema (`inputjson`) a form is
-     * rendered from and the version id the run and subscribe calls take. Empty for an app with
-     * nothing published. Cache it per app; ids are stable and schemas change rarely.
+     * One app and every published action and trigger of it, as `{ service, actions, triggers }`.
+     * Each action carries `action_id` and `action_version_id`, each trigger `trigger_id` and
+     * `trigger_version_id` — named as the calls take them: the version id for `runAction`,
+     * `listOptions` and `subscribe`; the other for `connect`, automations and the prebuilt UI.
+     * `input_schema` is the field schema a form is rendered from. `null` for an unknown service id
+     * (the API answers 200 with an empty service); empty arrays for an app with nothing published.
+     * Cache it per app; ids are stable and schemas change rarely.
      */
-    versions: async (serviceId: string): Promise<CatalogVersions> => {
-      const { data } = await request<CatalogVersion[]>({
+    versions: async (serviceId: string): Promise<CatalogVersions | null> => {
+      const { data } = await request<Record<string, unknown>>({
         method: 'POST',
         url: CATALOG.versions,
         body: JSON.stringify({ service_id: required('serviceId', serviceId) }),
         fetchImpl: this.transport
       })
-      const rows = Array.isArray(data) ? data : []
-      return { actions: rows.filter((row) => row.type === 'action'), triggers: rows.filter((row) => row.type === 'trigger') }
+      // No `success` key, so the body arrives whole as `data`; tolerate an envelope anyway.
+      const body = (data && 'service' in data ? data : (data?.data as Record<string, unknown> | undefined)) ?? {}
+      const service = body.service as CatalogService | undefined
+      if (!service?.name) return null
+      return {
+        service,
+        actions: Array.isArray(body.actions) ? (body.actions as CatalogAction[]) : [],
+        triggers: Array.isArray(body.triggers) ? (body.triggers as CatalogTrigger[]) : []
+      }
     }
   }
 

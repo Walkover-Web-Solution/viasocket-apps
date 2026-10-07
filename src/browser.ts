@@ -40,8 +40,9 @@ export interface ConnectOptions {
   /** The app to connect. Its service_id is shown on every app in the Apps API reference. */
   serviceId: string
   /**
-   * The rowids of the actions and triggers this product uses (each is listed with its action in
-   * the app's document). The popup then asks only for their scopes. Omit to offer every action.
+   * The `action_id`s and `trigger_id`s this product uses (listed under each one in the app's
+   * document and in `catalog.versions()`). The popup then asks only for their scopes. Omit to
+   * offer every action. Never a version id.
    */
   actions?: string[]
   /** With `actions`: skip the action list and open the app's consent screen directly. */

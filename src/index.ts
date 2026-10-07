@@ -21,6 +21,9 @@ export { signEmbedToken } from './token.js'
 export type { SignEmbedTokenInput } from './token.js'
 export type {
   CatalogApp,
+  CatalogAction,
+  CatalogService,
+  CatalogTrigger,
   CatalogVersion,
   CatalogVersions,
   EnableResult,

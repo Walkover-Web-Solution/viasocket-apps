@@ -88,9 +88,9 @@ const subscription = await user.subscribe(triggerVersionId, {
 import { connect } from 'viasocket-apps/browser'
 
 // embedToken comes from your backend (user.token()), signed for the signed-in user.
-// actions (optional): the rowids of the actions and triggers you use — the popup then asks only
+// actions (optional): the action_ids and trigger_ids you use — the popup then asks only
 // for their scopes; skipActionSelection goes straight to the app's consent screen.
-const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc', actions: ['<action rowid>'], skipActionSelection: true })
+const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc', actions: ['<action_id>'], skipActionSelection: true })
 // Send authId to your backend, which enables the app and stores the script_id.
 ```
 
@@ -108,8 +108,8 @@ const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc', actions: 
 | `user.listOptions(actionVersionId, { fieldKey, authId, existingFields })` | The values a field accepts, as `{ options, offset }`. Both response shapes normalised; an unreadable connection (revoked, another user's `auth_id`) throws a `ViaSocketError` with status 400 even though the API answers 200. |
 | `viasocket.runAction(scriptId, actionVersionId, inputData)` | Run one action. Returns the app's own response. |
 | `viasocket.catalog.search(key)` | The best 30 apps for what the user typed, as `{ serviceId, name, iconUrl, description }`. No token. |
-| `viasocket.catalog.list({ limit, offset, category })` | Every app, most used first, 200 a page; an empty page ends it. Drop apps whose `versions()` is empty. No token. |
-| `viasocket.catalog.versions(serviceId)` | Every published action and trigger of one app, as `{ actions, triggers }`, each with its `inputjson` schema and both of its ids: `actionversionrecordid` for `runAction`, `listOptions` and `subscribe`, `rowid` for `connect`, automations and the prebuilt UI. They look alike; copy the one the call names. No token. |
+| `viasocket.catalog.list({ limit, offset, category })` | Every app, most used first, 200 a page; an empty page ends it. Drop apps whose `versions()` is `null` or empty. No token. |
+| `viasocket.catalog.versions(serviceId)` | One app and every published action and trigger of it, as `{ service, actions, triggers }`. Each action has `action_id` and `action_version_id`, each trigger `trigger_id` and `trigger_version_id`, named as the calls take them: the version id for `runAction`, `listOptions` and `subscribe`; the other for `connect`, automations and the prebuilt UI. `input_schema` is the form schema. `null` for an unknown id. No token. |
 | `user.subscribe(triggerVersionId, { authId, inputData, code \| webhook, meta })` | Subscribe to an app event with a handler we run per event. Returns `{ scriptId, hookUrl, … }`. |
 | `user.updateSubscription(scriptId, { code, meta })` | Change a live subscription in place. |
 

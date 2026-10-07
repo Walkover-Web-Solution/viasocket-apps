@@ -232,21 +232,30 @@ test('catalog.list pages the full table, caps the limit at 200, and maps rowid t
   assert.deepEqual(apps, [{ serviceId: 'rowxzmscatfe', name: 'Microsoft Teams', description: 'd', iconUrl: 'i', category: ['Communication'], domain: 'teams.live.com' }])
 })
 
-test('catalog.versions POSTs the service_id and splits the bare array into actions and triggers', async () => {
-  const rows = [
-    { actionversionrecordid: 'a1', type: 'action', name: 'Send Message', inputjson: {} },
-    { actionversionrecordid: 't1', type: 'trigger', name: 'New Mention', inputjson: {} }
-  ]
-  const { viasocket, calls } = client([{ status: 200, body: rows }])
-  const { actions, triggers } = await viasocket.catalog.versions('rowbu58rc')
+test('catalog.versions POSTs the service_id and returns the service with its actions and triggers', async () => {
+  const body = {
+    service: { service_id: 'rowbu58rc', name: 'Slack', description: 'd', icon_url: 'i', auth_type: 'Auth2.0', requires_auth: true },
+    actions: [{ action_id: 'row1jrbor', action_version_id: 'rowj2u3wc8h5', name: 'Send Message', description: '', input_schema: {} }],
+    triggers: [{ trigger_id: 'rowypjs0enry', trigger_version_id: 'row9na0usfnq', name: 'New Mention', description: '', input_schema: {}, polled: true }]
+  }
+  const { viasocket, calls } = client([{ status: 200, body }])
+  const catalog = await viasocket.catalog.versions('rowbu58rc')
   assert.equal(calls[0].method, 'POST')
-  assert.equal(calls[0].url, 'https://flow.sokt.io/func/scriolZue69X')
+  assert.equal(calls[0].url, 'https://flow.sokt.io/func/scriK4LFg2kc')
   assert.deepEqual(JSON.parse(calls[0].body), { service_id: 'rowbu58rc' })
-  assert.deepEqual(actions.map((r) => r.name), ['Send Message'])
-  assert.deepEqual(triggers.map((r) => r.name), ['New Mention'])
+  assert.equal(catalog.service.name, 'Slack')
+  assert.deepEqual(catalog.actions.map((a) => [a.action_id, a.action_version_id]), [['row1jrbor', 'rowj2u3wc8h5']])
+  assert.deepEqual(catalog.triggers.map((t) => [t.trigger_id, t.trigger_version_id]), [['rowypjs0enry', 'row9na0usfnq']])
 })
 
 test('catalog.versions is empty, not an error, for an app with nothing published', async () => {
-  const { viasocket } = client([{ status: 200, body: [] }])
-  assert.deepEqual(await viasocket.catalog.versions('rowzwz91vwaw'), { actions: [], triggers: [] })
+  const service = { service_id: 'rowzwz91vwaw', name: 'Quiet App', description: null, icon_url: null, auth_type: null, requires_auth: false }
+  const { viasocket } = client([{ status: 200, body: { service, actions: [], triggers: [] } }])
+  assert.deepEqual(await viasocket.catalog.versions('rowzwz91vwaw'), { service, actions: [], triggers: [] })
+})
+
+test('catalog.versions is null for an unknown service id, which the API answers with an empty service', async () => {
+  const service = { service_id: 'rowdoesnotexist', name: null, description: null, icon_url: null, auth_type: null, requires_auth: false }
+  const { viasocket } = client([{ status: 200, body: { service, actions: [], triggers: [] } }])
+  assert.equal(await viasocket.catalog.versions('rowdoesnotexist'), null)
 })

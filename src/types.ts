@@ -129,31 +129,65 @@ export interface ListAppsParams {
   category?: string
 }
 
-/** One published action or trigger version of an app, as the catalog returns it. */
-export interface CatalogVersion {
-  /**
-   * The action’s or trigger’s own id: what `connect`’s `actions`, an automation’s `trigger_id` /
-   * `action_id` and the prebuilt UI’s `open: { actionId }` / `{ triggerId }` take. Looks like the
-   * version id below and is not interchangeable with it.
-   */
-  rowid: string
-  /** The `action_version_id` (or `trigger_version_id`) that `runAction`, `listOptions` and `subscribe` take — and only those. */
-  actionversionrecordid: string
-  type: 'action' | 'trigger' | string
+/** The app, once, at the top of `catalog.versions()`. */
+export interface CatalogService {
+  service_id: string
+  /** The display name. The API sends `null` for an unknown id; `versions()` then returns `null` instead of a catalog. */
+  name: string
+  description: string | null
+  icon_url: string | null
+  /** `Auth2.0`, `apikey`, `NoAuth`, … Informational: connect handles it. */
+  auth_type: string | null
+  /** `false` for an app without sign-in: no connect button, and `'NoAuth'` wherever a call takes an `authId`. */
+  requires_auth: boolean
+}
+
+interface CatalogEventBase {
   name: string
   description: string
-  /** The field schema a form is rendered from; `inputData` follows it. */
-  inputjson: Record<string, unknown>
-  sampledata?: unknown
-  pluginrecordid?: string
-  iconurl?: string
-  authtype?: string
+  /**
+   * The field schema a form is rendered from; `inputData` follows it. A block with a `source` or
+   * `optionsGenerator` key is a picker: fill it with `listOptions`, never by running what the key holds.
+   */
+  input_schema: Record<string, unknown>
+  /** A real response of the action, or a real event payload of the trigger. */
+  sample_output?: unknown
+  updated_at?: string
   [key: string]: unknown
 }
 
+/** One published action, its two ids named as the calls take them. */
+export interface CatalogAction extends CatalogEventBase {
+  /**
+   * The action’s own id: what `connect`’s `actions`, an automation step’s `action_id` and the
+   * prebuilt UI’s `open: { actionId }` take. Looks like the version id and is not interchangeable with it.
+   */
+  action_id: string
+  /** What `runAction` and `listOptions` take — and only those. */
+  action_version_id: string
+}
+
+/** One published trigger, its two ids named as the calls take them. */
+export interface CatalogTrigger extends CatalogEventBase {
+  /**
+   * The trigger’s own id: what `connect`’s `actions`, an automation’s `trigger_id` and the prebuilt
+   * UI’s `open: { triggerId }` take. Looks like the version id and is not interchangeable with it.
+   */
+  trigger_id: string
+  /** What `subscribe` and `listOptions` take — and only those. */
+  trigger_version_id: string
+  /** Not reliable yet: the API answers `true` for every trigger. */
+  polled?: boolean | null
+}
+
+/** @deprecated The catalog no longer returns rows of one shape; use `CatalogAction` and `CatalogTrigger`. */
+export type CatalogVersion = CatalogAction | CatalogTrigger
+
+/** What `catalog.versions()` returns for a known app. */
 export interface CatalogVersions {
-  actions: CatalogVersion[]
-  triggers: CatalogVersion[]
+  service: CatalogService
+  actions: CatalogAction[]
+  triggers: CatalogTrigger[]
 }
 
 export interface Envelope<T = unknown> {
