@@ -109,7 +109,7 @@ const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc', actions: 
 | `viasocket.runAction(scriptId, actionVersionId, inputData)` | Run one action. Returns the app's own response. |
 | `viasocket.catalog.search(key)` | The best 30 apps for what the user typed, as `{ serviceId, name, iconUrl, description }`. No token. |
 | `viasocket.catalog.list({ limit, offset, category })` | Every app, most used first, 200 a page; an empty page ends it. Drop apps whose `versions()` is empty. No token. |
-| `viasocket.catalog.versions(serviceId)` | Every published action and trigger of one app, as `{ actions, triggers }`, each with its `inputjson` schema and version id. No token. |
+| `viasocket.catalog.versions(serviceId)` | Every published action and trigger of one app, as `{ actions, triggers }`, each with its `inputjson` schema and both of its ids: `actionversionrecordid` for `runAction`, `listOptions` and `subscribe`, `rowid` for `connect`, automations and the prebuilt UI. They look alike; copy the one the call names. No token. |
 | `user.subscribe(triggerVersionId, { authId, inputData, code \| webhook, meta })` | Subscribe to an app event with a handler we run per event. Returns `{ scriptId, hookUrl, … }`. |
 | `user.updateSubscription(scriptId, { code, meta })` | Change a live subscription in place. |
 

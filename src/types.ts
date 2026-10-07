@@ -131,7 +131,13 @@ export interface ListAppsParams {
 
 /** One published action or trigger version of an app, as the catalog returns it. */
 export interface CatalogVersion {
-  /** The `action_version_id` (or trigger version id) the run and subscribe calls take. */
+  /**
+   * The action’s or trigger’s own id: what `connect`’s `actions`, an automation’s `trigger_id` /
+   * `action_id` and the prebuilt UI’s `open: { actionId }` / `{ triggerId }` take. Looks like the
+   * version id below and is not interchangeable with it.
+   */
+  rowid: string
+  /** The `action_version_id` (or `trigger_version_id`) that `runAction`, `listOptions` and `subscribe` take — and only those. */
   actionversionrecordid: string
   type: 'action' | 'trigger' | string
   name: string
