@@ -204,6 +204,21 @@ prebuilt UI, never the secret.
 Test with a real call before saying it works: run the action, or ask the developer to make the
 event happen once. Report what actually came back, not what the code should return.
 
+### Finished when
+
+An integration is not finished until every line below is true or marked not applicable, and the
+report to the developer says which. "Integrate Slack" means all of them for the actions and events
+in play, whether or not the developer named each one:
+
+- A Connect button with the app's icon, and the `auth_id` stored per user. An app without
+  sign-in has no button; its `auth_id` is `NoAuth`.
+- A dropdown filled by `list-options` for **every** fetched field the end user chooses — a
+  channel, a sheet, a board. A text box for one of those is not finished. A value the developer
+  fixed in code needs no picker.
+- Actions run from the backend on the app's `script_id`; the browser never holds a `script_id`.
+- Every event has a `code` handler running on viaSocket, and its subscription record is saved.
+- One real call was made, and its actual response is in the report.
+
 ### Field keys: copy, never type
 
 Keys are case-sensitive and **differ between actions of the same app**: Google Sheets uses
