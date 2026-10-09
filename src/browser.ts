@@ -7,18 +7,34 @@
  * It wraps viaSocket's standalone connect script — the popup, the postMessage handshake, the
  * three message types — behind one promise. Nothing here touches the signing secret: the
  * embedToken comes from your backend, already signed for this end user.
+ *
+ * The script is served by viaSocket at a fixed URL and is the only supported way to open the
+ * popup: it registers the token, hands the session over, opens the right page for its
+ * environment, and listens for the result on both paths it can arrive by (the popup's own
+ * postMessage, and a relay for sign-in pages that sever the popup's link to this page). A
+ * viasocket URL built by hand opens a page that does not exist.
  */
 
-const DEFAULT_SCRIPT_URL = 'https://embed.viasocket.com/prod-connectcomponent.js'
+const DEFAULT_SCRIPT_URL = 'https://flow.viasocket.com/connect.js'
 const SCRIPT_ID = 'viasocket-connect-script'
+/** A service id is one bare token of letters and digits: `rowo0bqrhj5g`, never `rowo0bqrhj5g_gmail`. */
+const SERVICE_ID = /^[A-Za-z0-9]+$/
+/** How long a late success is still delivered after `closed` — the script's own bound. */
+const LATE_SUCCESS_WINDOW_MS = 15 * 60 * 1000
 
 export type ConnectErrorCode =
-  /** The user closed the popup before finishing. Nothing was created. */
+  /**
+   * The popup seems to have been closed before finishing. Best-effort: once the popup is on the
+   * app's own sign-in page a close can only be inferred, and arrives about a minute later. If the
+   * user in fact finishes after that, `onLateSuccess` is called with the connection.
+   */
   | 'closed'
-  /** The app refused the authorisation. */
+  /** The app refused the authorisation, or viaSocket refused the request (an id that names no app). */
   | 'rejected'
   /** The connect script could not be loaded. */
   | 'script'
+  /** The `serviceId` is not a bare service id — the app's name, its slug, or an id with a name joined on. */
+  | 'invalid'
   /** Not running in a browser, or the popup could not be opened. */
   | 'unavailable'
 
@@ -37,7 +53,10 @@ export class ViaSocketConnectError extends Error {
 export interface ConnectOptions {
   /** Signed on your backend for the current end user — see `viasocket.user(id).token()`. */
   embedToken: string
-  /** The app to connect. Its service_id is shown on every app in the Apps API reference. */
+  /**
+   * The app to connect: its `service_id` exactly as the catalog returns it (`rowo0bqrhj5g`).
+   * Never the app's name or slug, never the id with a name joined on.
+   */
   serviceId: string
   /**
    * The `action_id`s and `trigger_id`s this product uses (listed under each one in the app's
@@ -47,7 +66,17 @@ export interface ConnectOptions {
   actions?: string[]
   /** With `actions`: skip the action list and open the app's consent screen directly. */
   skipActionSelection?: boolean
-  /** Where the connect script is served from. Only override for a non-production environment. */
+  /**
+   * Called if the connection completes after `connect()` already rejected with `'closed'` — the
+   * close was inferred while the user was still on the app's sign-in page. Treat it exactly like
+   * a resolved `connect()`.
+   */
+  onLateSuccess?: (result: ConnectResult) => void
+  /**
+   * Where the connect script is served from. The script picks its API and auth hosts from its
+   * own origin, so for a non-production stack point this at that stack's copy
+   * (`https://dev-flow.viasocket.com/connect.js`).
+   */
   scriptUrl?: string
 }
 
@@ -67,7 +96,7 @@ export interface ConnectResult {
 
 declare global {
   interface Window {
-    openViasocketConnection?: (embedToken: string, serviceId: string, options?: ConnectScriptOptions) => void
+    openViasocketConnection?: (embedToken: string, serviceId: string, options?: ConnectScriptOptions) => Promise<unknown> | void
   }
 }
 
@@ -104,16 +133,26 @@ export function loadConnectScript(scriptUrl: string = DEFAULT_SCRIPT_URL): Promi
   return scriptPromise
 }
 
+const RESULT_TYPES = ['viasocket_connection_success', 'viasocket_connection_error', 'viasocket_connection_closed']
+
 /**
  * Opens the consent popup for one app and resolves with the connection it creates.
  *
- * Rejects with a ViaSocketConnectError whose `code` says why: 'closed' if the user gave up,
- * 'rejected' if the app said no, 'script' if the connect script could not load.
+ * Rejects with a ViaSocketConnectError whose `code` says why: 'closed' if the user seems to have
+ * given up (best-effort — see `onLateSuccess`), 'rejected' if the app or viaSocket said no,
+ * 'invalid' if the serviceId is not a service id, 'script' if the connect script could not load.
  */
 export async function connect(options: ConnectOptions): Promise<ConnectResult> {
   const serviceId = options?.serviceId
   if (!options?.embedToken) throw new ViaSocketConnectError('unavailable', serviceId ?? '', 'connect: embedToken is required')
   if (!serviceId) throw new ViaSocketConnectError('unavailable', '', 'connect: serviceId is required')
+  if (typeof serviceId !== 'string' || !SERVICE_ID.test(serviceId)) {
+    throw new ViaSocketConnectError(
+      'invalid',
+      String(serviceId),
+      `connect: "${serviceId}" is not a service id. Pass the service_id exactly as the catalog returns it (a bare id such as rowo0bqrhj5g), not the app's name or slug, and not the id with a name joined on`
+    )
+  }
 
   await loadConnectScript(options.scriptUrl)
 
@@ -123,25 +162,48 @@ export async function connect(options: ConnectOptions): Promise<ConnectResult> {
   }
 
   return new Promise<ConnectResult>((resolve, reject) => {
-    const onMessage = (event: MessageEvent) => {
+    let closedReported = false
+    let lateTimer: ReturnType<typeof setTimeout> | null = null
+    const cleanup = () => {
+      window.removeEventListener('message', onMessage)
+      if (lateTimer) clearTimeout(lateTimer)
+    }
+    const toResult = (payload: { data?: unknown }): ConnectResult | null => {
+      const connection = (payload.data ?? {}) as Record<string, unknown>
+      const authId = typeof connection.id === 'string' ? connection.id : ''
+      return authId ? { authId, serviceId, connection } : null
+    }
+
+    function onMessage(event: MessageEvent) {
       const payload = event?.data
-      if (!payload || typeof payload.type !== 'string' || !payload.type.startsWith('viasocket_connection')) return
+      if (!payload || typeof payload.type !== 'string' || !RESULT_TYPES.includes(payload.type)) return
       // Two apps can be connecting in one page; only this app's messages are ours.
       if (payload.serviceId && payload.serviceId !== serviceId) return
 
-      window.removeEventListener('message', onMessage)
+      if (payload.type === 'viasocket_connection_closed') {
+        if (closedReported) return
+        closedReported = true
+        // Keep listening: a close on the app's sign-in page is inferred, and the script still
+        // delivers a success that arrives after it.
+        lateTimer = setTimeout(cleanup, LATE_SUCCESS_WINDOW_MS)
+        reject(new ViaSocketConnectError('closed', serviceId, 'The popup seems to have been closed before the connection finished'))
+        return
+      }
+
+      cleanup()
       if (payload.type === 'viasocket_connection_success') {
-        const connection = (payload.data ?? {}) as Record<string, unknown>
-        const authId = typeof connection.id === 'string' ? connection.id : ''
-        if (!authId) {
+        const result = toResult(payload)
+        if (closedReported) {
+          if (result) options.onLateSuccess?.(result)
+          return
+        }
+        if (!result) {
           reject(new ViaSocketConnectError('rejected', serviceId, 'The connection succeeded but carried no id'))
           return
         }
-        resolve({ authId, serviceId, connection })
-      } else if (payload.type === 'viasocket_connection_error') {
+        resolve(result)
+      } else if (!closedReported) {
         reject(new ViaSocketConnectError('rejected', serviceId, payload.error?.message || 'The app rejected the connection'))
-      } else if (payload.type === 'viasocket_connection_closed') {
-        reject(new ViaSocketConnectError('closed', serviceId, 'The popup was closed before the connection finished'))
       }
     }
 

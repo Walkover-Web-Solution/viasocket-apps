@@ -18,7 +18,7 @@ compatibility: >-
   flow.sokt.io (catalog, action runner). Any language; the optional viasocket-apps package needs Node 20+.
 metadata:
   author: viaSocket
-  version: '2026-10-07'
+  version: '2026-10-09'
 ---
 
 # viaSocket integrations
@@ -51,20 +51,6 @@ ask the developer once to allow all three: `flow.viasocket.com`, `flow-api.viaso
 `flow.sokt.io`. Name all three in one message, not one per failure. Until they are allowed, ask the
 developer to run each request and paste the response. Never guess an id.
 
-## What a product can do with it
-
-| You can                                | How                                                                                                                                                                                        | The end user sees                      |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
-| Connect an app                         | A popup with the app's own sign-in, asking only for the scopes of the actions you name; you get an `auth_id`                                                                               | Your Connect button                    |
-| Fill a picker with their real data     | `list-options`: their channels, sheets, boards — searchable                                                                                                                                | Your dropdown                          |
-| Do something in the app                | Run an action through the app's per-user runner — its `script_id`, from one `enable` call — no token needed                                                                                | Your form, your button                 |
-| React to something in the app          | Subscribe to a trigger with a **handler**: JavaScript viaSocket runs per event — no server, nothing public                                                                                 | A toggle, or nothing                   |
-| Chain apps                             | The handler runs another app's action                                                                                                                                                      | One toggle                             |
-| Run a whole automation for a user      | The **Automation API**: a trigger plus ordered JavaScript steps across their apps, built from your code or your agent, run in viaSocket's isolated VM — no scheduler, queue or worker here | Nothing — or the results in their apps |
-| Put every app in your UI               | The catalog API lists apps and every action's schema; one form renderer serves all                                                                                                         | Your integrations page                 |
-| Give your AI agent tools in their apps | An action's schema is a tool definition; a tool call runs it on the user's `script_id`                                                                                                     | Your assistant, acting                 |
-| Skip building the screens              | The **prebuilt UI**: viaSocket's screens in a box of your page — the whole catalog, one app, or one form                                                                                   | Our screen, inside your page           |
-
 ## Two ways in, and they combine
 
 **The Apps API** is this product's own screens and code calling viaSocket per user: a connect
@@ -90,15 +76,15 @@ users set things up or build on their own.
 
 Every integration is some of these seven; they combine freely.
 
-| Piece       | It is for…                                                                                                                                                                                                                  | The call                                                                                                                                      |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Connect     | the account of this product's own user, the one who configures. In a two-sided product (a bot builder, a marketplace, a helpdesk) that is this product's customer, never their visitor                                      | the connect popup → `auth_id`                                                                                                                 |
-| Pick        | a choice from the user's account: a channel, a sheet, a board                                                                                                                                                               | `list-options` on that field                                                                                                                  |
-| Act         | this product doing something in the app                                                                                                                                                                                     | `enable` once → run on the app's `script_id`                                                                                                  |
-| React       | something happening in the app that this product, or another app, responds to                                                                                                                                               | `subscribe-event` with a `code` handler                                                                                                       |
-| Catalog     | apps or actions not fixed in advance — the user, or this product's agent, picks them                                                                                                                                        | catalog API + one form renderer over `input_schema`                                                                                           |
-| Automate    | a whole automation — a trigger (an app event, a schedule, or a webhook this product calls) and ordered steps across the user's apps — written by this product's code or its agent and run on viaSocket; nothing hosted here | three calls — create flow, set trigger, save steps — in its own document (above); they take `action_id`s and `trigger_id`s, never version ids |
-| Prebuilt UI | viaSocket's screens instead of ones built here — for the whole catalog, a chosen set, one app, or one action's form                                                                                                         | `viaSocket.mount` + `embed.on("flow")`, its own section below                                                                                 |
+| Piece       | It is for…                                                                                                                                                                                                                                               | The call                                                                                                                                      | The end user sees                              |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Connect     | the account of this product's own user, the one who configures. In a two-sided product (a bot builder, a marketplace, a helpdesk) that is this product's customer, never their visitor                                                                   | the connect popup → `auth_id`: the app's own sign-in, asking only for the scopes of the actions named                                         | Your Connect button                            |
+| Pick        | a choice from the user's account: a channel, a sheet, a board — searchable                                                                                                                                                                               | `list-options` on that field                                                                                                                  | Your dropdown                                  |
+| Act         | this product doing something in the app                                                                                                                                                                                                                  | `enable` once → run on the app's per-user `script_id`, no token needed                                                                        | Your form, your button                         |
+| React       | something happening in the app that this product, or another app, responds to; chaining apps is the handler running another app's action                                                                                                                 | `subscribe-event` with a `code` handler: JavaScript viaSocket runs per event — no server here, nothing public                                 | A toggle, or nothing                           |
+| Catalog     | apps or actions not fixed in advance — the user, or this product's agent, picks them; an action's `input_schema` is also a tool definition, and a tool call runs it on the user's `script_id`                                                            | catalog API + one form renderer over `input_schema`                                                                                           | Your integrations page; your assistant, acting |
+| Automate    | a whole automation — a trigger (an app event, a schedule, or a webhook this product calls) and ordered steps across the user's apps — written by this product's code or its agent and run in viaSocket's isolated VM; no scheduler, queue or worker here | three calls — create flow, set trigger, save steps — in its own document (above); they take `action_id`s and `trigger_id`s, never version ids | Nothing — or the results in their apps         |
+| Prebuilt UI | viaSocket's screens instead of ones built here — the whole catalog, a chosen set, one app, or one action's form                                                                                                                                          | `viaSocket.mount` + `embed.on("flow")`, its own section below                                                                                 | Our screen, inside your page                   |
 
 How they combine — worked examples:
 
@@ -121,7 +107,7 @@ viaSocket); and, for an app **not in the catalog** — the developer's own produ
 connector built once in Plug Builder (Developer section of the dashboard) instead of a hand-rolled
 HTTP client here.
 
-## Build, in four steps
+## Build, in five steps
 
 ### 1. Find the app
 
@@ -131,6 +117,16 @@ GET https://flow.sokt.io/func/scri12BSufQM?key=<app name>
 
 `data` is `[{ service_id, name, iconurl, description }]`, the best 30 matches. Pick by `name`; if
 ambiguous ("Google"), show the candidates and ask. Never guess an id.
+
+`service_id` is used **exactly as returned** — the bare `row…` string (`rowo0bqrhj5g` for Gmail,
+`rowbu58rc` for Slack). Never build one: not the app's name or slug (`gmail`), not the id with a
+name joined on (`rowbu58rc_gmail`), not an id read off another value. An `auth_id` ends in
+`_<service_id>` (`auth2FvZLyE0_rowo0bqrhj5g`); that is one opaque value — pass it whole, never split
+it, never compose one. The popup, `enable` and the prebuilt UI reject anything else, some silently.
+
+`iconurl` is the app's icon. Show it on the Connect button and beside the name wherever the app is
+listed; the catalog call below returns the same URL as `service.icon_url`. A text-only button is a
+decision to report, not a default.
 
 To show every app — a grid or a panel in this product, not a search — page through the full list:
 
@@ -191,9 +187,12 @@ prebuilt UI, never the secret.
 2. A token endpoint on this product's backend. Prove it once: `GET https://flow-api.viasocket.com/embed/authentications`
    with a token → 200 and a list, empty until someone connects. 401 is the secret or the ids; fix
    that before any UI.
-3. A connect button per app, as the document's Step 1 shows, naming the actions and triggers the
+3. A connect button per app, as the document's Step 1 shows — the app's icon (`iconurl`) and name on
+   it, its `service_id` passed exactly as the search returned it — naming the actions and triggers the
    product uses (their `action_id`s and `trigger_id`s) so the consent screen asks only for their scopes. Store each `auth_id`.
-   An app without sign-in has no button; its `auth_id` is the string `NoAuth`.
+   An app without sign-in has no button; its `auth_id` is the string `NoAuth`. The popup is opened only
+   by `openViasocketConnection` from the connect script, never by a viasocket URL built by hand: a guessed
+   URL opens "Page not found" in front of the user.
 4. Enable an app **only if the product runs its actions**: once per user and app, with the user's
    `auth_id` or with `NoAuth` — enabling is needed either way. Look up first, and store the app's
    `script_id` like a password. An event needs only its `auth_id`.
@@ -201,9 +200,35 @@ prebuilt UI, never the secret.
 6. Actions: `inputData` shaped as the document's sample. Events: subscribe once, with a handler,
    and save the subscription record the document describes (the response is the subscription's
    own `script_id` — a different one from the app's).
+7. Before a handler or an automation step maps an event's keys, fetch **one real event** for the
+   connection it will run on — the trigger sample call under "The calls", with the developer's own
+   test connection while building and the user's at setup. Its keys are exactly what
+   `context.req.body` will hold; the trigger's name and the catalog's generic `sample_output` are not.
 
-Test with a real call before saying it works: run the action, or ask the developer to make the
-event happen once. Report what actually came back, not what the code should return.
+### 5. Prove it before you report
+
+Reading code cannot show whether an id names a real app, whether a version id sits where the call
+takes the `action_id`, or whether a viasocket URL was built by hand. A script can — no browser needed:
+
+```bash
+curl -fsSL https://flow.viasocket.com/viasocket-check.mjs -o viasocket-check.mjs
+node viasocket-check.mjs src        # the folders holding the integration; no dependencies, Node 18+
+```
+
+It finds every viaSocket id and URL in the code and checks each against the live catalog; it reads
+no `.env` file and prints no line of code. Fix every FAIL, keep it as a test (`npm test`, CI) so a
+later edit that swaps an id fails there and not in front of a user, and paste its output in the
+report. With `VIASOCKET_TEST_EMBED_TOKEN` set to a token signed for a test user it also proves the token.
+
+Then make one real call — run the action; for an event, the sample call, then the event made to
+happen once — and report what actually came back, not what the code should return. With a browser
+at hand, click Connect: the popup shows the app's own name and its actions or consent screen;
+"Page not found", a blank page or another app is a failure to report, not to work around.
+
+Last, read your own diff against this file and the app's document for what no script sees, and
+answer each in the report: the Connect button carries the app's icon and name; `closed` from the
+popup is treated as "nothing yet", not a result; every field key was copied from the action's
+table, none typed from a label; the secret and every `script_id` are server-side only.
 
 ### Finished when
 
@@ -227,7 +252,8 @@ the developer named each one.
 - **Where it runs.** Actions from the backend on the app's `script_id`; events through a `code`
   handler on viaSocket, with the subscription record saved. The browser holds a token only for
   the connect popup and the prebuilt UI, never a `script_id`.
-- **Proof.** One real call was made, and its actual response is in the report.
+- **Proof.** Step 5 was done: the check script's output, one real call's actual response and, with
+  a browser, the popup seen open on the app — all in the report.
 
 ### Field keys: copy, never type
 
@@ -342,17 +368,18 @@ https://flow.viasocket.com/documentation/embed.md?org=<org_id>&project=<project_
 Each app's document spells these out with that app's ids and fields. `authorization: <embed token>`
 on every `flow-api` call; the run URL takes no token.
 
-| Call                                         | Request                                                                                                                                                                                                                                                           | Returns                                                                                                                                        |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Connect (browser)                            | `openViasocketConnection(embedToken, service_id, { filteredActions: [<action_id>…], skipActionSelection: true })` from `https://embed.viasocket.com/prod-connectcomponent.js` — the options are optional; with them the popup asks only for those actions' scopes | `message` event `viasocket_connection_success`; `event.data.data.id` is the `auth_id`                                                          |
-| Enable — once per user and app, actions only | `POST https://flow-api.viasocket.com/embed/enable/<service_id>/<auth_id>`, empty body; `NoAuth` in place of the `auth_id` for an app without sign-in                                                                                                              | `data.script_id` — the app's runner for this user                                                                                              |
-| Options for one field                        | `POST https://flow-api.viasocket.com/embed/list-options/<action_version_id>` `{ fieldKey, auth_id, existingFields }`                                                                                                                                              | `data` is the array, or `{ data: [...], offset }` for a field that pages; an unreadable connection answers 200 with `data.response.status` 400 |
-| Run an action                                | `POST https://flow.sokt.io/func/<script_id>` `{ action_version_id, inputData }`                                                                                                                                                                                   | `{ success, data }`, or the action's own body when it has no `data` key                                                                        |
-| Subscribe to a trigger                       | `POST https://flow-api.viasocket.com/embed/subscribe-event/<trigger_version_id>` `{ auth_id, inputData, code: "<handler>", meta }`                                                                                                                                | `data.script_id` — this subscription's own id; save it with the inputData and the handler                                                      |
-| Change a live handler                        | `PUT https://flow-api.viasocket.com/embed/update-subscribed-event/<subscription script_id>` `{ code }`                                                                                                                                                            | —                                                                                                                                              |
-| Disable / re-enable                          | `PUT https://flow-api.viasocket.com/embed/updatestatus/<script_id>?status=0` (`1` re-enables; what the prebuilt UI's Delete and Pause do)                                                                                                                         | `data.status`                                                                                                                                  |
-| The user's flows                             | `GET https://flow-api.viasocket.com/projects/<project_id>/integrations`                                                                                                                                                                                           | `data.flows[]` `{ id, service_id, status, webhook }` — `id` is the `script_id`                                                                 |
-| Connections / disconnect                     | `GET https://flow-api.viasocket.com/embed/authentications` · `DELETE https://flow-api.viasocket.com/embed/authentications/revoke/<auth_id>`                                                                                                                       | —                                                                                                                                              |
+| Call                                         | Request                                                                                                                                                                                                                                                                                                | Returns                                                                                                                                                                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Connect (browser)                            | `openViasocketConnection(embedToken, service_id, { filteredActions: [<action_id>…], skipActionSelection: true })` from `https://flow.viasocket.com/connect.js` — the options are optional; with them the popup asks only for those actions' scopes; `service_id` exactly as returned, never composed   | `message` event `viasocket_connection_success`; `event.data.data.id` is the `auth_id`                                                                                                                                          |
+| Enable — once per user and app, actions only | `POST https://flow-api.viasocket.com/embed/enable/<service_id>/<auth_id>`, empty body; `NoAuth` in place of the `auth_id` for an app without sign-in                                                                                                                                                   | `data.script_id` — the app's runner for this user                                                                                                                                                                              |
+| Options for one field                        | `POST https://flow-api.viasocket.com/embed/list-options/<action_version_id>` `{ fieldKey, auth_id, existingFields }`                                                                                                                                                                                   | `data` is the array, or `{ data: [...], offset }` for a field that pages; an unreadable connection answers 200 with `data.response.status` 400                                                                                 |
+| Run an action                                | `POST https://flow.sokt.io/func/<script_id>` `{ action_version_id, inputData }`                                                                                                                                                                                                                        | `{ success, data }`, or the action's own body when it has no `data` key                                                                                                                                                        |
+| Subscribe to a trigger                       | `POST https://flow-api.viasocket.com/embed/subscribe-event/<trigger_version_id>` `{ auth_id, inputData, code: "<handler>", meta }`                                                                                                                                                                     | `data.script_id` — this subscription's own id; save it with the inputData and the handler                                                                                                                                      |
+| Sample of a trigger's event                  | `POST https://flow.sokt.io/func/scrijZpnr8zJ?action_id=<trigger_id>&auth_id=<auth_id>&authType=<service.auth_type>` `{ "context": { "inputData": … } }` — no token, the `auth_id` is the credential (server or terminal only); `trigger_id`, never the version id; `NoAuth` for an app without sign-in | one real event, exactly as `context.req.body` will hold it when the trigger fires; a `viasocket_help` key in it is viaSocket's note, not part of the event — drop it; `Auth data not found` means the `auth_id` cannot be read |
+| Change a live handler                        | `PUT https://flow-api.viasocket.com/embed/update-subscribed-event/<subscription script_id>` `{ code }`                                                                                                                                                                                                 | —                                                                                                                                                                                                                              |
+| Disable / re-enable                          | `PUT https://flow-api.viasocket.com/embed/updatestatus/<script_id>?status=0` (`1` re-enables; what the prebuilt UI's Delete and Pause do)                                                                                                                                                              | `data.status`                                                                                                                                                                                                                  |
+| The user's flows                             | `GET https://flow-api.viasocket.com/projects/<project_id>/integrations`                                                                                                                                                                                                                                | `data.flows[]` `{ id, service_id, status, webhook }` — `id` is the `script_id`                                                                                                                                                 |
+| Connections / disconnect                     | `GET https://flow-api.viasocket.com/embed/authentications` · `DELETE https://flow-api.viasocket.com/embed/authentications/revoke/<auth_id>`                                                                                                                                                            | —                                                                                                                                                                                                                              |
 
 **Two ids per action and trigger, and they look alike.** Every action has an `action_id` and an
 `action_version_id`; every trigger a `trigger_id` and a `trigger_version_id`. Both are `row…` strings
@@ -371,6 +398,14 @@ call that takes it, so copy same-name to same-name and never the other.
 - The secret and every `script_id` stay on the server. Never in a committed file, never in a browser.
 - One `unique_identifier` per end user, forever. No `exp` on the token.
 - Never hardcode an id the document says to fetch. Never type a field key: copy it from the action's table.
+- A `service_id` is the bare `row…` string, used exactly as returned: never joined with a name or
+  slug (`rowbu58rc_gmail`), never built from an `auth_id`, which is one opaque value passed whole.
+  The connect popup is opened only by `openViasocketConnection` from
+  `https://flow.viasocket.com/connect.js`; a URL built by hand opens "Page not found".
+- No report without step 5: the check script's output, one real call, the review of the diff.
+- Every app has an icon (`iconurl` / `icon_url`): it goes on the Connect button and beside the name in any list.
+- Before mapping an event's keys, fetch one real event with the trigger sample call; `context.req.body`
+  holds exactly that, and a `viasocket_help` key in it is a note, not a field.
 - Two ids per action and trigger, and they look alike: the version id for run, list-options and
   subscribe; the `action_id` / `trigger_id` for the connect popup, automations and the prebuilt UI. Copy the one the
   call names; the table under “The calls” says which.

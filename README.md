@@ -37,6 +37,18 @@ goes in your server's `.env`. The skill is
 viaSocket and mirrored here; the same text filled with your ids is served at
 `https://flow.viasocket.com/documentation/skill.md?org=<org_id>&project=<project_id>`.
 
+Before you ship — with or without an agent — check the code against the live catalog:
+
+```sh
+curl -fsSL https://flow.viasocket.com/viasocket-check.mjs -o viasocket-check.mjs
+node viasocket-check.mjs src
+```
+
+It finds every viaSocket id and URL in your code and says whether each names a real app, action or
+trigger, is used where its call expects that kind of id (the two ids of an action look alike), and
+whether any viasocket URL was built by hand. No dependencies; exits 1 on a failure, so it can be a
+test. It reads no `.env` file and prints no line of code.
+
 ## Server
 
 ```js
@@ -94,8 +106,17 @@ const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc', actions: 
 // Send authId to your backend, which enables the app and stores the script_id.
 ```
 
-`connect()` rejects with a `ViaSocketConnectError` whose `code` is `'closed'` (the user gave up),
-`'rejected'` (the app said no) or `'script'` (the connect script did not load).
+`serviceId` is the app's `service_id` exactly as the catalog returns it — a bare id such as
+`rowbu58rc`, never the app's name or slug, never the id with a name joined on. `connect()` loads
+viaSocket's connect script from `https://flow.viasocket.com/connect.js` and lets it open the popup;
+that script is the only supported way to open it, so never build a viasocket URL for it by hand.
+
+`connect()` rejects with a `ViaSocketConnectError` whose `code` is `'closed'` (the user seems to
+have given up), `'rejected'` (the app or viaSocket said no), `'invalid'` (`serviceId` is not a
+service id) or `'script'` (the connect script did not load). `'closed'` is best-effort: once the
+popup is on the app's own sign-in page a close can only be inferred, and arrives about a minute
+later; if the user then finishes anyway, `onLateSuccess` is called with the same result a resolved
+`connect()` gives. Treat `'closed'` as "nothing yet", not as a verdict.
 
 ## Methods
 
@@ -169,7 +190,9 @@ carrying the API's own `message`, the HTTP `status`, and the parsed `body`.
 
 Defaults target production: `https://flow-api.viasocket.com` for the API and
 `https://flow.sokt.io` for running actions. Pass `apiBaseUrl` / `runBaseUrl` to point elsewhere,
-and `scriptUrl` to `connect()` for a non-production connect script.
+and `scriptUrl` to `connect()` for a non-production connect script — the script picks its own API
+and auth hosts from the origin it is served from, so that is that stack's copy
+(`https://dev-flow.viasocket.com/connect.js`).
 
 ## License
 
