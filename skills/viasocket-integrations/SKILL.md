@@ -106,6 +106,7 @@ How they combine — worked examples:
 | "Let users automate their Slack — we won't build the forms"                                                                | Prebuilt UI, opened on Slack                                       | viaSocket's screens for Slack only, in a box of ours: `open: { serviceId }`, `filteredServices` with that app; a `flow` listener stores what they publish                                                                                                                                                                                                                                   |
 | "A Slack message form in our settings page, our UI around it"                                                              | Prebuilt UI, opened on one action                                  | this product's page with viaSocket's form for that action in a box: `open: { actionId }`, `showEnabled: false`; the `flow` event gives the flow id, and `open: { flowId }` reopens it later                                                                                                                                                                                                 |
 | "Every morning, summarise yesterday's orders with AI and post them to the team's Slack — we don't want to run a scheduler" | Connect, Automate                                                  | a connect button; the schedule, the AI step and the Slack step run on viaSocket, and the flow shows in the prebuilt UI if one is mounted                                                                                                                                                                                                                                                    |
+| "Offer every user a ready-made daily digest they switch on"                                                                | Connect, Automate                                                  | a toggle in this product; its code creates that user's flow from the product's template — the same trigger and steps, their connection and the channel they picked                                                                                                                                                                                                                          |
 
 Two more things the pieces allow: a handler with **no app on the far side** (transform, filter, fan
 out, call this product's own API with its own auth header — ordinary JavaScript running on
@@ -211,6 +212,25 @@ prebuilt UI, never the secret.
    test connection while building and the user's at setup. Its keys are exactly what
    `context.req.body` will hold; the trigger's name and the catalog's generic `sample_output` are not.
 
+### A test connection, while building
+
+Running an action, fetching a trigger's real event and proving the token all need a connection, and
+only a person can make one: the app's sign-in runs in a browser. Ask the developer once, early, and
+read the `auth_id` back yourself; never ask them to paste ids.
+
+1. Tell the developer: "Open `https://flow.viasocket.com/integrations/<org_id>/<project_id>/apps-api`,
+   choose <app>, click Connect and sign in with a test account. Tell me when it shows an `auth_id`."
+   That page connects as the test user `apps-api-test-user` — the identifier shown at the top of it.
+2. Sign an embed token (step 3) for `unique_identifier` `apps-api-test-user` and call
+   `GET https://flow-api.viasocket.com/embed/authentications` with it. The entry whose `id` ends in
+   `_<service_id>` is that app's connection, and its `id` is the `auth_id`.
+3. With it: enable the app once for a `script_id`; run the action once against a test target (a test
+   channel, a test sheet) and keep its real response — that, not the catalog's sample, is what a later
+   step maps from; fetch a trigger's real event with the sample call.
+
+The test connection is for building. Its `auth_id` and `script_id` never go into the product's code
+or config; the product's users make their own through its Connect button.
+
 ### 5. Prove it before you report
 
 Reading code cannot show whether an id names a real app, whether a version id sits where the call
@@ -224,9 +244,9 @@ node viasocket-check.mjs src        # the folders holding the integration; no de
 It finds every viaSocket id and URL in the code and checks each against the live catalog; it reads
 no `.env` file and prints no line of code. Fix every FAIL, keep it as a test (`npm test`, CI) so a
 later edit that swaps an id fails there and not in front of a user, and paste its output in the
-report. With `VIASOCKET_TEST_EMBED_TOKEN` set to a token signed for a test user it also proves the token.
+report. With `VIASOCKET_TEST_EMBED_TOKEN` set to a token signed for `apps-api-test-user` it also proves the token.
 
-Then make one real call — run the action; for an event, the sample call, then the event made to
+Then make one real call on the test connection — run the action against a test target; for an event, the sample call, then the event made to
 happen once — and report what actually came back, not what the code should return. With a browser
 at hand, click Connect: the popup shows the app's own name and its actions or consent screen;
 "Page not found", a blank page or another app is a failure to report, not to work around.
