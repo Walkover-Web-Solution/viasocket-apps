@@ -118,6 +118,38 @@ popup is on the app's own sign-in page a close can only be inferred, and arrives
 later; if the user then finishes anyway, `onLateSuccess` is called with the same result a resolved
 `connect()` gives. Treat `'closed'` as "nothing yet", not as a verdict.
 
+## AI assistant
+
+A chat assistant we run for each of your users: threads and history kept per user, your prompt per
+call, your own endpoints as its tools — one of which can run an action in the user's apps. Backend
+only, like everything else here: the prompt and the tools' headers are yours.
+
+```js
+const reply = await user.ai.send({
+  threadId: 'support-7f3a9c', // your own string per conversation; omit to start one
+  message: 'Where is the order for customer 4471?',
+  prompt: 'You are an order assistant. Use lookup_order to fetch orders. Answer in one sentence.',
+  tools: [
+    {
+      name: 'lookup_order',
+      description: 'Fetches an order by customer id',
+      url: 'https://api.your-product.com/orders/lookup',
+      headers: { Authorization: `Bearer ${process.env.ORDERS_API_KEY}` },
+      fields: { id: { type: 'string', description: 'Customer id to look up' } },
+      requiredParams: ['id']
+    }
+  ]
+})
+reply.content // the answer; with responseType 'json_object' or 'json_schema', the parsed object
+
+const threads = await user.ai.threads() // [{ threadId, title, updatedAt }] — title is null until the AI writes it
+const page = await user.ai.history(threadId, { page: 1 }) // { messages, page, hasMore } — 40 exchanges a page, page 1 the latest
+const socket = await user.ai.rtlayerToken() // for a chat UI: the browser subscribes with it, then you send with delivery: 'rtlayer'
+```
+
+The whole contract — tools, JSON answers, the websocket path and what arrives on it — is
+[flow.viasocket.com/documentation/ai.md](https://flow.viasocket.com/documentation/ai.md).
+
 ## Methods
 
 | Call | What it does |
@@ -172,6 +204,9 @@ minutes between checks, as a string: `"5"` or `"15"`.
 | `user.disableFlow(scriptId)` / `user.enableFlow(scriptId)` | Turn a flow off or back on. Disabling a subscription ends it. |
 | `user.listConnections()` | Every app this user has connected. |
 | `user.revokeConnection(authId)` | Disconnect an app. Disable its flows first. |
+| `user.ai.send({ message, threadId, prompt, tools, responseType, delivery })` | One message to the assistant we run for this user. Returns `{ threadId, messageId, content, finishReason }`, or `{ threadId, messageId, channel }` with `delivery: 'rtlayer'`. |
+| `user.ai.threads()` / `user.ai.history(threadId, { page })` | This user's threads, newest first (`title` is `null` until the AI writes it); one thread's messages, 40 exchanges a page. |
+| `user.ai.rtlayerToken()` | A 48-hour subscribe token for the browser, with the `channelPrefix` every thread's channel starts with. |
 | `signEmbedToken({ orgId, projectId, uniqueIdentifier, secret })` | The signing step on its own, if you want it without a client. |
 
 Every failure — a non-2xx status or a body with `success: false` — throws a `ViaSocketError`

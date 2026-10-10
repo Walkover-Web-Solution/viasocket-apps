@@ -259,3 +259,93 @@ test('catalog.versions is null for an unknown service id, which the API answers 
   const { viasocket } = client([{ status: 200, body: { service, actions: [], triggers: [] } }])
   assert.equal(await viasocket.catalog.versions('rowdoesnotexist'), null)
 })
+
+test('ai.send POSTs the message with every field renamed as the API takes it, and maps the reply', async () => {
+  const { user, calls } = client([ok({ thread_id: 'support-7f3a9c', message_id: 'm1', content: 'Order #981 shipped today.', finish_reason: 'completed' })])
+  const reply = await user.ai.send({
+    threadId: 'support-7f3a9c',
+    message: 'Where is my order?',
+    prompt: 'You are an order assistant.',
+    responseType: 'text',
+    model: 'gpt-5.6-luna',
+    service: 'openai',
+    tools: [
+      {
+        name: 'lookup_order',
+        description: 'Fetches an order',
+        url: 'https://api.example.com/orders',
+        headers: { Authorization: 'Bearer k' },
+        fields: { id: { type: 'string', description: 'Customer id' } },
+        requiredParams: ['id']
+      }
+    ]
+  })
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/ai/message')
+  assert.equal(calls[0].method, 'POST')
+  assert.match(calls[0].headers.authorization, /^eyJ/)
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    message: 'Where is my order?',
+    thread_id: 'support-7f3a9c',
+    prompt: 'You are an order assistant.',
+    response_type: 'text',
+    model: 'gpt-5.6-luna',
+    service: 'openai',
+    extra_tools: [
+      {
+        name: 'lookup_order',
+        description: 'Fetches an order',
+        url: 'https://api.example.com/orders',
+        method: 'POST',
+        headers: { Authorization: 'Bearer k' },
+        fields: { id: { type: 'string', description: 'Customer id' } },
+        required_params: ['id'],
+        tool_and_variable_path: {}
+      }
+    ]
+  })
+  assert.deepEqual(reply, { threadId: 'support-7f3a9c', messageId: 'm1', content: 'Order #981 shipped today.', finishReason: 'completed' })
+})
+
+test('ai.send with delivery rtlayer returns the channel from the 202, and needs a threadId', async () => {
+  const { user, calls } = client([
+    { status: 202, body: { success: true, message: 'accepted', data: { thread_id: 't1', message_id: 'm2', channel: 'embedai_proj_1_t1' } } }
+  ])
+  const accepted = await user.ai.send({ threadId: 't1', message: 'hi', delivery: 'rtlayer' })
+  assert.deepEqual(accepted, { threadId: 't1', messageId: 'm2', channel: 'embedai_proj_1_t1' })
+  assert.equal(JSON.parse(calls[0].body).delivery, 'rtlayer')
+  await assert.rejects(() => user.ai.send({ message: 'hi', delivery: 'rtlayer' }), /threadId is required/)
+})
+
+test('ai.send refuses what the API would refuse, before any request', async () => {
+  const { user, calls } = client([])
+  await assert.rejects(() => user.ai.send({ message: 'hi', model: 'gpt-5.6-luna' }), /model and service/)
+  await assert.rejects(() => user.ai.send({ message: 'hi', jsonSchema: { name: 'x', schema: {} } }), /json_schema/)
+  await assert.rejects(() => user.ai.send({ message: 'hi', threadId: 'has space' }), /threadId/)
+  await assert.rejects(() => user.ai.send({ message: '' }), /message is required/)
+  assert.equal(calls.length, 0)
+})
+
+test('ai.threads and ai.history map the lists, keeping a null title', async () => {
+  const { user, calls } = client([
+    ok({ threads: [{ thread_id: 't1', title: null, updated_at: '2026-10-08T09:14:02.000Z' }] }),
+    ok({ thread_id: 't1', messages: [{ role: 'user', content: 'hi', message_id: 'm1', created_at: '2026-10-08T09:14:01.000Z' }], page: 2, has_more: true })
+  ])
+  assert.deepEqual(await user.ai.threads(), [{ threadId: 't1', title: null, updatedAt: '2026-10-08T09:14:02.000Z' }])
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/ai/threads')
+  const page = await user.ai.history('t1', { page: 2 })
+  assert.equal(calls[1].url, 'https://flow-api.viasocket.com/embed/ai/threads/t1/history?page=2')
+  assert.equal(calls[1].method, 'GET')
+  assert.deepEqual(page, {
+    threadId: 't1',
+    messages: [{ role: 'user', content: 'hi', messageId: 'm1', createdAt: '2026-10-08T09:14:01.000Z' }],
+    page: 2,
+    hasMore: true
+  })
+})
+
+test('ai.rtlayerToken maps the subscribe token', async () => {
+  const { user, calls } = client([ok({ token: 'rt', org_id: 'o', service_id: 's', channel_prefix: 'embedai_proj_1_', expires_in: '48h' })])
+  assert.deepEqual(await user.ai.rtlayerToken(), { token: 'rt', orgId: 'o', serviceId: 's', channelPrefix: 'embedai_proj_1_', expiresIn: '48h' })
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/ai/rtlayer-token')
+  assert.equal(calls[0].method, 'GET')
+})

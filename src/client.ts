@@ -12,6 +12,13 @@ import { ViaSocketError } from './errors.js'
 import { request } from './http.js'
 import { signEmbedToken } from './token.js'
 import type {
+  AiAccepted,
+  AiHistoryPage,
+  AiReply,
+  AiRtLayerToken,
+  AiSend,
+  AiSendParams,
+  AiThread,
   CatalogAction,
   CatalogApp,
   CatalogService,
@@ -32,6 +39,9 @@ import type {
 } from './types.js'
 
 const DEFAULT_API_BASE_URL = 'https://flow-api.viasocket.com'
+/** The AI API's thread id: the product's own string. */
+const AI_THREAD_ID = /^[A-Za-z0-9_-]{1,100}$/
+const AI_MAX_TOOLS = 20
 const DEFAULT_RUN_BASE_URL = 'https://flow.sokt.io'
 
 /** The public catalog: no token, the same data in every environment. */
@@ -341,6 +351,110 @@ export class UserScope {
 
   enableFlow(scriptId: string) {
     return this.setFlowStatus(scriptId, 1)
+  }
+
+  /**
+   * The AI API: a chat assistant viaSocket runs for this user — threads and history kept per
+   * `unique_identifier`, your prompt per call, your own endpoints as its tools. Backend only, like
+   * everything else here: the prompt and the tools' headers are yours to keep off the browser.
+   * The whole contract is https://flow.viasocket.com/documentation/ai.md.
+   */
+  readonly ai = {
+    /**
+     * Sends one message and returns the answer — or, with `delivery: 'rtlayer'`, the 202's
+     * `channel` the answer will be published on (subscribe to it in the browser before sending).
+     * Refuses, before any request, what the API would refuse: a threadId with other characters,
+     * `rtlayer` without a threadId, a model without its service, a jsonSchema without its responseType.
+     */
+    send: (async (params: AiSendParams): Promise<AiReply | AiAccepted> => {
+      const body: Record<string, unknown> = { message: required('message', params?.message) }
+      if (params.threadId !== undefined) {
+        if (!AI_THREAD_ID.test(params.threadId)) {
+          throw new ViaSocketError('ai.send: threadId is letters, digits, - and _, up to 100 characters', { status: null })
+        }
+        body.thread_id = params.threadId
+      }
+      if (params.delivery === 'rtlayer' && !params.threadId) {
+        throw new ViaSocketError('ai.send: threadId is required with delivery "rtlayer" — subscribe to its channel, then send', { status: null })
+      }
+      if (params.prompt !== undefined) body.prompt = params.prompt
+      if (params.responseType) body.response_type = params.responseType
+      if (params.jsonSchema) {
+        if (params.responseType !== 'json_schema') {
+          throw new ViaSocketError('ai.send: jsonSchema is only allowed with responseType "json_schema"', { status: null })
+        }
+        body.json_schema = params.jsonSchema
+      }
+      if (!params.model !== !params.service) throw new ViaSocketError('ai.send: model and service go together', { status: null })
+      if (params.model) {
+        body.model = params.model
+        body.service = params.service
+      }
+      if (params.tools?.length) {
+        if (params.tools.length > AI_MAX_TOOLS) throw new ViaSocketError(`ai.send: at most ${AI_MAX_TOOLS} tools in one call`, { status: null })
+        body.extra_tools = params.tools.map((tool) => ({
+          name: required('tool.name', tool?.name),
+          description: required('tool.description', tool?.description),
+          url: required('tool.url', tool?.url),
+          method: tool.method ?? 'POST',
+          headers: tool.headers ?? {},
+          fields: tool.fields ?? {},
+          required_params: tool.requiredParams ?? [],
+          tool_and_variable_path: tool.toolAndVariablePath ?? {}
+        }))
+      }
+      if (params.delivery) body.delivery = params.delivery
+
+      const { data } = await this.call<{
+        thread_id: string
+        message_id: string
+        content?: string | Record<string, unknown>
+        finish_reason?: string
+        channel?: string
+      }>('POST', '/embed/ai/message', body)
+      if (params.delivery === 'rtlayer') return { threadId: data.thread_id, messageId: data.message_id, channel: data.channel ?? '' }
+      return { threadId: data.thread_id, messageId: data.message_id, content: data.content ?? '', finishReason: data.finish_reason ?? '' }
+    }) as unknown as AiSend,
+
+    /** This user's threads in this project, most recently active first. */
+    threads: async (): Promise<AiThread[]> => {
+      const { data } = await this.call<{ threads?: Array<{ thread_id: string; title: string | null; updated_at: string }> }>(
+        'GET',
+        '/embed/ai/threads'
+      )
+      return (data?.threads ?? []).map((thread) => ({ threadId: thread.thread_id, title: thread.title ?? null, updatedAt: thread.updated_at }))
+    },
+
+    /** One thread's messages, 40 exchanges a page; page 1 holds the latest, oldest of those first. */
+    history: async (threadId: string, params: { page?: number } = {}): Promise<AiHistoryPage> => {
+      const page = Math.max(1, Math.floor(params.page ?? 1))
+      const { data } = await this.call<{
+        thread_id: string
+        messages?: Array<{ role: string; content: string; message_id: string; created_at: string }>
+        page?: number
+        has_more?: boolean
+      }>('GET', `/embed/ai/threads/${encodeURIComponent(required('threadId', threadId))}/history?page=${page}`)
+      return {
+        threadId: data.thread_id ?? threadId,
+        messages: (data.messages ?? []).map((message) => ({
+          role: message.role,
+          content: message.content,
+          messageId: message.message_id,
+          createdAt: message.created_at
+        })),
+        page: data.page ?? page,
+        hasMore: Boolean(data.has_more)
+      }
+    },
+
+    /** A 48-hour subscribe token for the browser, and the prefix every thread's channel starts with. */
+    rtlayerToken: async (): Promise<AiRtLayerToken> => {
+      const { data } = await this.call<{ token: string; org_id: string; service_id: string; channel_prefix: string; expires_in: string }>(
+        'GET',
+        '/embed/ai/rtlayer-token'
+      )
+      return { token: data.token, orgId: data.org_id, serviceId: data.service_id, channelPrefix: data.channel_prefix, expiresIn: data.expires_in }
+    }
   }
 
   /**

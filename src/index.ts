@@ -11,6 +11,7 @@
  *   const { options } = await user.listOptions(actionVersionId, {...}) // fill a dropdown
  *   const result = await viasocket.runAction(scriptId, actionVersionId, inputData)
  *   const sub = await user.subscribe(triggerVersionId, { authId, inputData, code: handler })
+ *   const reply = await user.ai.send({ threadId, message, prompt, tools })  // a chat assistant we run for this user
  *
  * The browser half — opening the connect popup — lives at 'viasocket-apps/browser'.
  */
@@ -20,6 +21,15 @@ export { ViaSocketError } from './errors.js'
 export { signEmbedToken } from './token.js'
 export type { SignEmbedTokenInput } from './token.js'
 export type {
+  AiAccepted,
+  AiHistoryPage,
+  AiMessage,
+  AiReply,
+  AiRtLayerToken,
+  AiSend,
+  AiSendParams,
+  AiThread,
+  AiTool,
   CatalogApp,
   CatalogAction,
   CatalogService,

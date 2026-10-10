@@ -196,3 +196,110 @@ export interface Envelope<T = unknown> {
   data: T
   isCached?: boolean
 }
+
+/**
+ * The AI API — `user.ai`: a chat assistant viaSocket runs for one end user, with threads and
+ * history kept per `unique_identifier` and your own HTTP endpoints as the tools it may call.
+ */
+
+/** One HTTP endpoint of yours the assistant may call while answering. */
+export interface AiTool {
+  /** The name the model calls it by, and the name you use in the prompt: letters, digits, underscores. */
+  name: string
+  /** When to use it, in a sentence or two. The model decides from this. */
+  description: string
+  /** The endpoint to call: your own backend, with its own auth in `headers`. Never a run URL — its script_id is a credential. */
+  url: string
+  /** Default POST. */
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  /** Headers for that call — your own API key. They stay server-side. */
+  headers?: Record<string, string>
+  /** The parameters the model may fill, each with a `type` and a `description` it fills from. */
+  fields?: Record<string, { type: string; description?: string; [key: string]: unknown }>
+  /** Which of `fields` the model must fill before calling. */
+  requiredParams?: string[]
+  /** Maps prompt variables to tool parameters. Advanced; omit for an ordinary tool. */
+  toolAndVariablePath?: Record<string, unknown>
+}
+
+export interface AiSendParams {
+  /** What the user said. */
+  message: string
+  /**
+   * Your own string per conversation: letters, digits, `-` and `_`, up to 100 characters. Omit to
+   * start a thread and read the id from the reply. Required with `delivery: 'rtlayer'`, so the
+   * browser can subscribe to the thread's channel before the send.
+   */
+  threadId?: string
+  /**
+   * The system prompt for this call. It is not stored, so send it every time. May use
+   * `{{orgId}}`, `{{projectId}}` and `{{userId}}`. Name the tools in it and say when to use each.
+   */
+  prompt?: string
+  /** `text` (default); `json_object`; or `json_schema`, which needs `jsonSchema`. */
+  responseType?: 'text' | 'json_object' | 'json_schema'
+  jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean }
+  /** A model and its provider, always together: `model: 'gpt-5.6-luna', service: 'openai'`. Omit both for the default. */
+  model?: string
+  service?: string
+  /** Up to 20. Only the ones this conversation can need. */
+  tools?: AiTool[]
+  /** `sync` (default): the answer in the response. `rtlayer`: a 202 and the answer on the thread's websocket channel. */
+  delivery?: 'sync' | 'rtlayer'
+}
+
+/** The answer, from a synchronous send. */
+export interface AiReply {
+  threadId: string
+  messageId: string
+  /** A string, or the parsed object for a JSON `responseType`. */
+  content: string | Record<string, unknown>
+  /** `completed`, `truncated` (out of output tokens), or `tool_call` (stopped to call a tool). */
+  finishReason: 'completed' | 'truncated' | 'tool_call' | string
+}
+
+/** The acknowledgement of a send with `delivery: 'rtlayer'`; the answer follows on `channel`. */
+export interface AiAccepted {
+  threadId: string
+  messageId: string
+  /** `channelPrefix + threadId`, from `rtlayerToken()`. */
+  channel: string
+}
+
+export interface AiSend {
+  (params: AiSendParams & { delivery: 'rtlayer' }): Promise<AiAccepted>
+  (params: AiSendParams & { delivery?: 'sync' }): Promise<AiReply>
+}
+
+export interface AiThread {
+  threadId: string
+  /** Written by the AI from the thread's first message; `null` until then. */
+  title: string | null
+  updatedAt: string
+}
+
+export interface AiMessage {
+  role: 'user' | 'assistant' | string
+  content: string
+  /** A user message and its reply share one id. */
+  messageId: string
+  createdAt: string
+}
+
+/** 40 exchanges a page; page 1 holds the latest, in chronological order. */
+export interface AiHistoryPage {
+  threadId: string
+  messages: AiMessage[]
+  page: number
+  hasMore: boolean
+}
+
+/** What the browser needs to listen for replies: valid 48 hours, this user's threads only. */
+export interface AiRtLayerToken {
+  token: string
+  orgId: string
+  serviceId: string
+  /** A thread's channel is this followed by the threadId. */
+  channelPrefix: string
+  expiresIn: string
+}
