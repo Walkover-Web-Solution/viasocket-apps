@@ -146,8 +146,10 @@ interface CatalogEventBase {
   name: string
   description: string
   /**
-   * The field schema a form is rendered from; `inputData` follows it. A block with a `source` or
-   * `optionsGenerator` key is a picker: fill it with `listOptions`, never by running what the key holds.
+   * The field schema a form is rendered from; `inputData` follows it. A `dropdown` / `multiselect`
+   * block with no `options` (or with `enableSearchApi` / `willDynamicFetchOptions`), and an
+   * `input groups` block with no children in `steps`, is a picker: fill it with `listOptions`. The
+   * schema carries no generator code.
    */
   input_schema: Record<string, unknown>
   /** A real response of the action, or a real event payload of the trigger. */

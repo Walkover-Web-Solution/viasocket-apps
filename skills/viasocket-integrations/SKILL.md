@@ -251,6 +251,10 @@ the developer named each one.
   developer in code; chosen by the user once, in a picker filled from their account; or filled per
   run by the product's assistant, as a tool parameter. A free-text box for an id is a fourth
   choice, and one that needs a reason.
+- **Every row of the table.** Each field of an action's table is in the product — shown to the
+  user with its `what it is` text as label and hint, or fixed in code with a reason in the report.
+  A `required: yes` row is never dropped because its key looks technical; a boolean whose key says
+  nothing is still a question the user answers.
 - **Who picks the action.** The developer, in code; the user, from a list — the catalog API in
   this product's UI, or the prebuilt UI; or the product's assistant, from tool definitions, each
   one an action's schema with the fixed fields removed. With `chatbot: true` the user decides per
