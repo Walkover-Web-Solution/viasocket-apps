@@ -43,13 +43,13 @@ same file through the skills CLI.
 
 ## What viaSocket gives you
 
-| Capability          | Reach for it when the product needs to…                                                                                                                     | Runs on                                  | Document                                                            |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------- |
-| **App connections** | let a user connect their Gmail, Slack, HubSpot…; fill a dropdown with their data; do something in their app; react when something happens there             | the product's backend, calling viaSocket | one document per app, below; every app at runtime: `catalog-api.md` |
-| **Automations**     | "when X, do Y, then Z": a trigger (an app event, a schedule, a webhook) and steps across the user's apps, with no scheduler, queue or worker in the product | viaSocket                                | `automations.md`                                                    |
-| **AI assistant**    | a chat in the product's own UI: one thread per user, the product's instructions, the product's own endpoints as tools, answers streamed to the screen       | viaSocket                                | `ai.md`                                                             |
-| **AI as a step**    | summarise, classify, extract, generate text or look something up, inside any handler or automation, with no model key                                       | viaSocket                                | the built-in Run AI Model action, below                             |
-| **Prebuilt UI**     | let end users browse apps and build their own integrations in viaSocket's screens, inside a box of the product's page                                       | a component in the product's page        | `embed.md`                                                          |
+| Capability          | Reach for it when the product needs to…                                                                                                                                                                   | Runs on                                  | Document                                                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------- |
+| **App connections** | let a user connect their Gmail, Slack, HubSpot…; fill a dropdown with their data; do something in their app; react when something happens there                                                           | the product's backend, calling viaSocket | one document per app, below; every app at runtime: `catalog-api.md` |
+| **Automations**     | "when X, do Y, then Z": a trigger (an app event, a schedule, a webhook) and steps across the user's apps, with no scheduler, queue or worker in the product                                               | viaSocket                                | `automations.md`                                                    |
+| **AI assistant**    | a chat in the product's own UI: one thread per user, the product's instructions, the product's own endpoints as tools, answers streamed to the screen; it reads web pages and searches the web on its own | viaSocket                                | `ai.md`                                                             |
+| **AI as a step**    | summarise, classify, extract, generate text, read a web page or search the web, inside any handler or automation, with no model key                                                                       | viaSocket                                | the built-in Run AI Model action, below                             |
+| **Prebuilt UI**     | let end users browse apps and build their own integrations in viaSocket's screens, inside a box of the product's page                                                                                     | a component in the product's page        | `embed.md`                                                          |
 
 They combine: an automation can call AI and then an app action; the assistant can act in the user's
 apps through one of its tools; the prebuilt UI and the product's own code share the same connections.
@@ -191,15 +191,17 @@ Three calls build a flow and one reads it back; full bodies and the step shape a
 
 Three actions are built in and need no search. Their services are apps like any other:
 
-| Built in                                                                            | `service_id`   | `action_id`    | Sign-in                                           |
-| ----------------------------------------------------------------------------------- | -------------- | -------------- | ------------------------------------------------- |
-| AI: write, classify, extract, look up the web ("Run AI Model", viaSocket utilities) | `row29ruc9gs1` | `rowskkqydb6f` | none: `NoAuth` wherever a call takes an `auth_id` |
-| Delay: wait a fixed time ("Pause Workflow")                                         | `row29ruc9gs1` | `row6hurrxf00` | none, `NoAuth`                                    |
-| Memory: key-value storage between runs                                              | `rowhc2623dta` | `rown00e31rlb` | the user connects it like any app                 |
+| Built in                                                                                            | `service_id`   | `action_id`    | Sign-in                                           |
+| --------------------------------------------------------------------------------------------------- | -------------- | -------------- | ------------------------------------------------- |
+| AI: write, classify, extract, read a web page, search the web ("Run AI Model", viaSocket utilities) | `row29ruc9gs1` | `rowskkqydb6f` | none: `NoAuth` wherever a call takes an `auth_id` |
+| Delay: wait a fixed time ("Pause Workflow")                                                         | `row29ruc9gs1` | `row6hurrxf00` | none, `NoAuth`                                    |
+| Memory: key-value storage between runs                                                              | `rowhc2623dta` | `rown00e31rlb` | the user connects it like any app                 |
 
 ### AI assistant
 
 `POST …/embed/ai/message` with `{ message, thread_id, prompt, extra_tools, response_type, delivery }` → `data.content`, `data.thread_id`, `data.message_id`. Backend only: the prompt and the tools' headers travel in the body. `thread_id` is the product's own string per conversation (`support-<uuid>`); the prompt is sent with every message. Tools are the product's own endpoints, each with its auth header; one of them can run an app action on the user's `script_id`. The run URL itself is never a tool. The user's threads: `GET …/embed/ai/threads`; a thread's history: `GET …/embed/ai/threads/<thread_id>/history?page=1`. For a chat screen, `delivery: "rtlayer"` with `GET …/embed/ai/rtlayer-token`: the browser subscribes to the thread's channel, then the backend sends. Everything, with the message shapes: `https://flow.viasocket.com/documentation/ai.md?org=<org_id>&project=<project_id>`.
+
+**Web access is built in, for the assistant and for the Run AI Model step alike.** Given a URL, the model reads the page; given a question about current facts, it searches the web and cites its source. Nothing to declare or enable: there is no flag (one sent is rejected), and `extra_tools` is only for the product's own endpoints. A product that wants the assistant offline says so in the prompt ("you have no web access"), which is obeyed. The response does not say whether the web was used, so a product that must know asks for the source URL in the prompt. It reads and searches; it does not click, fill forms or sign in anywhere.
 
 Three AIs, not one: inside a flow or a handler, the built-in Run AI Model action; a chat in the product's UI, this API; the end user's own flow-building assistant, the prebuilt UI with `chatbot: true`.
 
