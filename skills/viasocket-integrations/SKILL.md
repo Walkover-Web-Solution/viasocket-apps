@@ -163,7 +163,7 @@ GET https://flow.viasocket.com/documentation/<service_id>.md?format=http&org=<or
 
 `format=sdk` instead for a Node 20+ backend using the `viasocket-apps` package. 404 means the app
 has no published actions or triggers: say so and stop. Download it exactly (`curl -fsSL … -o`)
-beside this file (`.claude/skills/viasocket-<app>/SKILL.md` or your agent's equivalent): a fetch
+beside this file, in the same skills or rules folder, as `viasocket-<app>`: a fetch
 tool that summarises loses ids and keys. It is long — Slack's is 60 KB — so read its "Step 1 — the connect
 button", the one action or trigger you use, and "How to render a picker for any field"; open the
 rest when you need it. It carries every
