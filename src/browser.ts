@@ -67,6 +67,12 @@ export interface ConnectOptions {
   /** With `actions`: skip the action list and open the app's consent screen directly. */
   skipActionSelection?: boolean
   /**
+   * An existing connection's `authId`, to sign in to it again — when it has expired (`isExpired` in
+   * `user.listConnections()`), or to grant scopes it lacks. The popup updates that connection in
+   * place and resolves with the same `authId`, so nothing stored against it changes.
+   */
+  authId?: string
+  /**
    * Called if the connection completes after `connect()` already rejected with `'closed'` — the
    * close was inferred while the user was still on the app's sign-in page. Treat it exactly like
    * a resolved `connect()`.
@@ -84,6 +90,7 @@ export interface ConnectOptions {
 interface ConnectScriptOptions {
   filteredActions?: string[]
   skipActionSelection?: boolean
+  authId?: string
 }
 
 export interface ConnectResult {
@@ -211,6 +218,7 @@ export async function connect(options: ConnectOptions): Promise<ConnectResult> {
     const scriptOptions: ConnectScriptOptions = {}
     if (options.actions?.length) scriptOptions.filteredActions = options.actions
     if (options.skipActionSelection) scriptOptions.skipActionSelection = true
+    if (options.authId) scriptOptions.authId = options.authId
     if (Object.keys(scriptOptions).length) open(options.embedToken, serviceId, scriptOptions)
     else open(options.embedToken, serviceId)
   })

@@ -1,6 +1,6 @@
 {
   "name": "viasocket-apps",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Server-side client for the viaSocket Apps API: let your users connect Slack, GitHub, Google Sheets or any of 2,300+ apps from your own product, then run actions and receive events through one API.",
   "keywords": [
     "viasocket",
@@ -47,7 +47,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/finish-build.mjs",
-    "test": "npm run build && node --test test/token.test.mjs test/client.test.mjs",
+    "test": "npm run build && node --test test/token.test.mjs test/client.test.mjs test/browser.test.mjs",
     "prepublishOnly": "npm test"
   },
   "devDependencies": {

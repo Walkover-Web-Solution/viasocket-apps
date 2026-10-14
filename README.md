@@ -104,6 +104,9 @@ import { connect } from 'viasocket-apps/browser'
 // for their scopes; skipActionSelection goes straight to the app's consent screen.
 const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc', actions: ['<action_id>'], skipActionSelection: true })
 // Send authId to your backend, which enables the app and stores the script_id.
+
+// When user.listConnections() shows a connection with isExpired: true, sign in to it again:
+await connect({ embedToken, serviceId: 'rowbu58rc', authId }) // updates it in place; resolves with the same authId
 ```
 
 `serviceId` is the app's `service_id` exactly as the catalog returns it — a bare id such as
