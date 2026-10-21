@@ -151,12 +151,132 @@ test('findEnabled matches on service_id and active status, and reads the project
   assert.equal(calls[0].method, 'GET')
 })
 
-test('disableFlow PUTs status=0 and trims the flow record down to what matters', async () => {
-  const { user, calls } = client([ok({ id: 'scriCXNY1Ogu', status: '0', script: 'function _response_calling() {…}', json_script: { huge: true } })])
+test('findEnabled also finds a paused app, which is resumed rather than enabled twice', async () => {
+  const flows = { flows: [{ id: 'scriPAUSED', title: 't', status: 'paused', webhook: '', auth_id: 'a', service_id: 'rowqm5xi2' }] }
+  const { user } = client([ok(flows)])
+  assert.equal(await user.findEnabled('rowqm5xi2'), 'scriPAUSED')
+})
+
+test('disableFlow pauses (status=2) — 0 deletes — and trims the flow record down to what matters', async () => {
+  const { user, calls } = client([ok({ id: 'scriCXNY1Ogu', status: '2', script: 'function _response_calling() {…}', json_script: { huge: true } })])
   const result = await user.disableFlow('scriCXNY1Ogu')
-  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/updatestatus/scriCXNY1Ogu?status=0')
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/updatestatus/scriCXNY1Ogu?status=2')
   assert.equal(calls[0].method, 'PUT')
-  assert.deepEqual(result, { id: 'scriCXNY1Ogu', status: '0' })
+  assert.deepEqual(result, { id: 'scriCXNY1Ogu', status: '2' })
+})
+
+test('deleteFlow sends status=0 and enableFlow status=1', async () => {
+  const { user, calls } = client([ok({ id: 's', status: '0' }), ok({ id: 's', status: '1' })])
+  await user.deleteFlow('s')
+  await user.enableFlow('s')
+  assert.match(calls[0].url, /\?status=0$/)
+  assert.match(calls[1].url, /\?status=1$/)
+})
+
+test('renameFlow PUTs title, description and meta to the flow route and returns only what a caller uses', async () => {
+  const { user, calls } = client([ok({ id: 'scriX', title: 'Daily digest', description: 'd', script: 'function…' })])
+  const result = await user.renameFlow('scriX', { title: 'Daily digest', description: 'd', meta: { plan: 'pro' } })
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/projects/updateflowembed/scriX')
+  assert.equal(calls[0].method, 'PUT')
+  assert.deepEqual(JSON.parse(calls[0].body), { title: 'Daily digest', description: 'd', meta: { plan: 'pro' } })
+  assert.deepEqual(result, { id: 'scriX', title: 'Daily digest', description: 'd' })
+  await assert.rejects(user.renameFlow('scriX', { title: '' }), /title is required/)
+})
+
+const slackCatalog = {
+  service: { service_id: 'rowbu58rc', name: 'Slack', description: null, icon_url: null, auth_type: 'Auth2.0', requires_auth: true },
+  actions: [
+    { action_id: 'row1jrbor', action_version_id: 'rowj2u3wc8h5', versionid: 'V107', name: 'Send Message', description: '', input_schema: {} },
+    { action_id: 'rowA', action_version_id: 'rowAv', versionid: 'V1', name: 'Twin', description: '', input_schema: {} },
+    { action_id: 'rowB', action_version_id: 'rowBv', versionid: 'V1', name: 'Twin', description: '', input_schema: {} }
+  ],
+  triggers: [{ trigger_id: 'rowT', trigger_version_id: 'rowTv', versionid: 'V9', name: 'New Mention', description: '', input_schema: {} }]
+}
+
+test('catalog.serviceIdFor resolves a slug once, caches it, and refuses an unknown or mis-cased one', async () => {
+  const { viasocket, calls } = client([
+    { status: 200, body: { data: { plugins: { slack: { name: 'Slack', rowid: 'rowbu58rc' } } } } },
+    { status: 200, body: { data: { plugins: {} } } }
+  ])
+  assert.equal(await viasocket.catalog.serviceIdFor('slack'), 'rowbu58rc')
+  assert.equal(await viasocket.catalog.serviceIdFor('slack'), 'rowbu58rc')
+  assert.equal(calls.length, 1, 'the second lookup is cached')
+  assert.equal(calls[0].url, 'https://plug-service.viasocket.com/api/v1/plugins/recommend/services?service=slack')
+  assert.equal(calls[0].headers.authorization, undefined)
+  await assert.rejects(viasocket.catalog.serviceIdFor('Slack'), /No viaSocket app has the slug "Slack"/)
+})
+
+test('catalog.versionIdFor finds an event by id or path, refuses an ambiguous one, and warns on a newer version', async () => {
+  const { viasocket, calls } = client([{ status: 200, body: slackCatalog }])
+  assert.equal(await viasocket.catalog.versionIdFor('rowbu58rc', 'row1jrbor', 'V107'), 'rowj2u3wc8h5')
+  assert.equal(await viasocket.catalog.versionIdFor('rowbu58rc', 'send-message'), 'rowj2u3wc8h5')
+  assert.equal(await viasocket.catalog.versionIdFor('rowbu58rc', 'rowT'), 'rowTv', 'a trigger gives its trigger_version_id')
+  assert.equal(calls.length, 1, 'one catalog read serves every lookup')
+  await assert.rejects(viasocket.catalog.versionIdFor('rowbu58rc', 'twin'), /several events "twin"/)
+  await assert.rejects(viasocket.catalog.versionIdFor('rowbu58rc', 'nope'), /no published event "nope"/)
+
+  const warnings = []
+  const warn = console.warn
+  console.warn = (message) => warnings.push(message)
+  try {
+    assert.equal(await viasocket.catalog.versionIdFor('rowbu58rc', 'row1jrbor', 'V106'), 'rowj2u3wc8h5')
+  } finally {
+    console.warn = warn
+  }
+  assert.match(warnings[0], /published as V107, not V106/)
+})
+
+test('catalog.versionIdFor does not keep an empty answer: the next call reads again', async () => {
+  const { viasocket, calls } = client([{ status: 200, body: { service: { name: null } } }, { status: 200, body: slackCatalog }])
+  await assert.rejects(viasocket.catalog.versionIdFor('rowbu58rc', 'row1jrbor'), /no app has the service id/)
+  assert.equal(await viasocket.catalog.versionIdFor('rowbu58rc', 'row1jrbor'), 'rowj2u3wc8h5')
+  assert.equal(calls.length, 2)
+})
+
+test('catalog.list carries the slug', async () => {
+  const { viasocket } = client([{ status: 200, body: { data: [{ rowid: 'rowbu58rc', name: 'Slack', appslugname: 'slack' }] } }])
+  const [app] = await viasocket.catalog.list()
+  assert.equal(app.slug, 'slack')
+})
+
+test('catalog.listBuiltIn lists the SDK-tagged plugs that publish actions, with their sign-in', async () => {
+  const { viasocket, calls } = client([
+    { status: 200, body: { data: [
+      { rowid: 'row29ruc9gs1', name: 'viaSocket utilities', appslugname: 'viasocket-utilities' },
+      { rowid: 'rowhc2623dta', name: 'Memory', appslugname: 'memory' },
+      { rowid: 'rowEMPTY', name: 'Nothing yet', appslugname: 'nothing' }
+    ] } },
+    { status: 200, body: { service: { name: 'viaSocket utilities', auth_type: 'NoAuth', requires_auth: false }, actions: [{ action_id: 'rowskkqydb6f', name: 'Run AI Model' }], triggers: [] } },
+    { status: 200, body: { service: { name: 'Memory', auth_type: 'apikey', requires_auth: true }, actions: [{ action_id: 'rown00e31rlb', name: 'Memory' }], triggers: [] } },
+    { status: 200, body: { service: { name: 'Nothing yet', requires_auth: true }, actions: [], triggers: [] } }
+  ])
+  const apps = await viasocket.catalog.listBuiltIn()
+  assert.equal(calls[0].url, 'https://plug-service.viasocket.com/api/v1/plugins/all?limit=100&offset=0&category=SDK')
+  assert.deepEqual(apps.map((app) => [app.slug, app.requiresAuth, app.actions.length]), [['memory', true, 1], ['viasocket-utilities', false, 1]])
+})
+
+test('sampleEvent posts the trigger_id, auth and inputData to the run host, and drops viasocket_help', async () => {
+  const { viasocket, calls } = client([{ status: 200, body: { text: 'hi', channel: 'C1', viasocket_help: 'a note' } }])
+  const event = await viasocket.sampleEvent('rowT', 'auth1_rowbu58rc', 'Auth2.0', { channel: 'C1' })
+  assert.equal(calls[0].url, 'https://flow.sokt.io/func/scrijZpnr8zJ?action_id=rowT&auth_id=auth1_rowbu58rc&authType=Auth2.0')
+  assert.equal(calls[0].headers.authorization, undefined)
+  assert.deepEqual(JSON.parse(calls[0].body), { context: { inputData: { channel: 'C1' } } })
+  assert.deepEqual(event, { text: 'hi', channel: 'C1' })
+})
+
+test('sampleEvent: a connection that cannot be read is an error, not an event', async () => {
+  const { viasocket } = client([{ status: 200, body: { response: { status: 400, data: { message: 'Auth data not found' } } } }])
+  await assert.rejects(viasocket.sampleEvent('rowT', 'bad', 'Auth2.0'), /Auth data not found/)
+})
+
+test('setFlowStatus to the state a flow is already in succeeds', async () => {
+  const { user } = client([{ status: 400, body: { success: false, message: 'Status is already set to this value' } }])
+  assert.deepEqual(await user.enableFlow('scriX'), { id: 'scriX', status: '1' })
+})
+
+test('sampleEvent explains "No response": it was given a version id', async () => {
+  const { viasocket } = client([{ status: 200, body: { success: true, message: 'No response' } }])
+  await assert.rejects(viasocket.sampleEvent('rowTv', 'a', 'Auth2.0'), /pass the trigger_id, not its version id/)
 })
 
 test('revokeConnection DELETEs and resolves on the empty-array response', async () => {

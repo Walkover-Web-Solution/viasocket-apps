@@ -25,6 +25,8 @@ export interface RequestOptions {
   /** Already serialised. `''` sends an empty body, which is what /embed/enable expects. */
   body?: string
   fetchImpl: typeof fetch
+  /** Aborts the request; an abort is thrown as is, so a caller can tell a timeout from a refusal. */
+  signal?: AbortSignal
 }
 
 export async function request<T = unknown>(options: RequestOptions): Promise<Envelope<T>> {
@@ -33,8 +35,9 @@ export async function request<T = unknown>(options: RequestOptions): Promise<Env
 
   let response: Response
   try {
-    response = await options.fetchImpl(options.url, { method: options.method, headers, body: options.body })
+    response = await options.fetchImpl(options.url, { method: options.method, headers, body: options.body, signal: options.signal })
   } catch (error) {
+    if ((error as Error)?.name === 'TimeoutError' || (error as Error)?.name === 'AbortError') throw error
     throw new ViaSocketError(`Request to ${options.url} failed: ${(error as Error)?.message || 'network error'}`, { status: null })
   }
 

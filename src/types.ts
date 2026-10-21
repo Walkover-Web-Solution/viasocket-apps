@@ -106,7 +106,15 @@ export interface Flow {
   serviceId: string
 }
 
-export type FlowStatus = 0 | 1
+/** What `setFlowStatus` sets: `2` pauses, `1` resumes or restores, `0` deletes. */
+export type FlowStatus = 0 | 1 | 2
+
+export interface RenameFlowParams {
+  title: string
+  description?: string
+  /** Anything of yours; comes back as `metadata` in the prebuilt UI's flow events. */
+  meta?: Record<string, unknown>
+}
 
 /** The envelope every viaSocket endpoint answers with. */
 /** One app of the catalog, from a search or the full list. */
@@ -116,9 +124,24 @@ export interface CatalogApp {
   name: string
   description: string
   iconUrl: string
-  /** Only the full list carries these. */
+  /**
+   * The app's slug (`slack`, `google-sheets`): what code names a fixed app by, resolved with
+   * `catalog.serviceIdFor`. Case-sensitive. Only the full list carries it, and `category` and `domain`.
+   */
+  slug?: string
   category?: string[]
   domain?: string
+}
+
+/** One built-in plug — `catalog.listBuiltIn()` — with its published actions. */
+export interface BuiltInApp {
+  serviceId: string
+  slug: string
+  name: string
+  iconUrl: string
+  /** `false`: no Connect button, and `'NoAuth'` wherever a call takes an `authId`. */
+  requiresAuth: boolean
+  actions: CatalogAction[]
 }
 
 export interface ListAppsParams {
@@ -152,7 +175,9 @@ interface CatalogEventBase {
    * schema carries no generator code.
    */
   input_schema: Record<string, unknown>
-  /** A real response of the action, or a real event payload of the trigger. */
+  /** The published version's name (`V107`): what `versionIdFor` checks the version in your code against. */
+  versionid?: string
+  /** The connector author's example of the response or event, from another account: map from a real one. */
   sample_output?: unknown
   updated_at?: string
   [key: string]: unknown

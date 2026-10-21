@@ -19,6 +19,7 @@ import type {
   AiSend,
   AiSendParams,
   AiThread,
+  BuiltInApp,
   CatalogAction,
   CatalogApp,
   CatalogService,
@@ -32,6 +33,7 @@ import type {
   ListAppsParams,
   ListOptionsResult,
   Option,
+  RenameFlowParams,
   SubscribeParams,
   SubscribeResult,
   UpdateSubscriptionParams,
@@ -48,9 +50,27 @@ const DEFAULT_RUN_BASE_URL = 'https://flow.sokt.io'
 const CATALOG = {
   search: 'https://flow.sokt.io/func/scri12BSufQM',
   list: 'https://plug-service.viasocket.com/api/v1/plugins/all',
-  versions: 'https://flow.sokt.io/func/scriK4LFg2kc'
+  versions: 'https://flow.sokt.io/func/scriK4LFg2kc',
+  slug: 'https://plug-service.viasocket.com/api/v1/plugins/recommend/services'
 }
 const LIST_LIMIT_MAX = 200
+/** The run-host function that fetches one real event of a trigger for one connection. */
+const SAMPLE_EVENT_FUNCTION = 'scrijZpnr8zJ'
+/** Plugs tagged with these categories in Developer Hub are the built-ins `catalog.listBuiltIn()` returns. */
+export const BUILT_IN_PLUG_CATEGORIES = ['SDK'] as const
+/** The list answers an empty page for a category with `limit=200`; stay under it. */
+const BUILT_IN_PAGE = 100
+/** An unknown slug is answered by nothing, slowly; a known one in well under a second. */
+const SLUG_TIMEOUT_MS = 30_000
+/** How long `versionIdFor` trusts its copy of an app's catalog. */
+const VERSIONS_TTL_MS = 10 * 60_000
+
+/** `Send Message` → `send-message`: an event's path on its documentation page. */
+const eventPath = (name: string) =>
+  `${name || ''}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 
 function required(name: string, value: string | undefined): string {
   if (typeof value !== 'string' || !value.trim()) throw new ViaSocketError(`${name} is required`, { status: null })
@@ -67,6 +87,10 @@ export class ViaSocket {
   private readonly secret: string
   /** @internal */
   readonly transport: typeof fetch
+  /** slug → service_id. Slugs never change their app, so for the life of the process. */
+  private readonly serviceIds = new Map<string, Promise<string>>()
+  /** service_id → its catalog, for `versionIdFor`; a failed read is dropped, never kept. */
+  private readonly versionsCache = new Map<string, { at: number; value: Promise<CatalogVersions | null> }>
 
   constructor(options: ViaSocketOptions) {
     this.orgId = required('orgId', options?.orgId)
@@ -123,9 +147,81 @@ export class ViaSocket {
         name: String(row.name ?? ''),
         description: String(row.description ?? ''),
         iconUrl: String(row.iconurl ?? ''),
+        ...(typeof row.appslugname === 'string' && row.appslugname ? { slug: row.appslugname } : {}),
         category: Array.isArray(row.category) ? (row.category as string[]) : [],
         domain: typeof row.domain === 'string' ? row.domain : undefined
       }))
+    },
+    /**
+     * The `service_id` of the app with this slug (`slack`, `google-sheets`) — how code names a fixed
+     * app. Exact and case-sensitive; an unknown slug is a ViaSocketError, never a guess (it can take
+     * up to 30 s to be told so). Cached for the life of the process.
+     */
+    serviceIdFor: (slug: string): Promise<string> => {
+      const key = required('slug', slug)
+      let found = this.serviceIds.get(key)
+      if (!found) {
+        found = this.resolveSlug(key)
+        this.serviceIds.set(key, found)
+        found.catch(() => this.serviceIds.delete(key))
+      }
+      return found
+    },
+    /**
+     * The version id `runAction`, `listOptions` and `subscribe` take, for one event of an app, read
+     * from the live catalog. `event` is the event's `action_id` / `trigger_id` (it survives a rename)
+     * or its path on the app's page (`send-message`). `version` is the one your code was written
+     * against (`V107`): when the app has published another, this warns and returns the published one —
+     * reread the event's page and update the code. Cached 10 minutes per app.
+     */
+    versionIdFor: async (serviceId: string, event: string, version?: string): Promise<string> => {
+      const wanted = required('event', event).trim()
+      const app = await this.cachedVersions(required('serviceId', serviceId))
+      if (!app) throw new ViaSocketError(`versionIdFor: no app has the service id "${serviceId}"`, { status: null })
+      // Each event with the version id the calls take, whichever kind it is.
+      const all = [
+        ...app.actions.map((e) => ({ id: e.action_id, versionId: e.action_version_id, name: e.name, versionid: e.versionid })),
+        ...app.triggers.map((e) => ({ id: e.trigger_id, versionId: e.trigger_version_id, name: e.name, versionid: e.versionid }))
+      ]
+      const byId = all.filter((e) => e.id === wanted)
+      const found = byId.length ? byId : all.filter((e) => eventPath(e.name) === wanted)
+      if (found.length !== 1) {
+        throw new ViaSocketError(
+          `versionIdFor: ${app.service.name} has ${found.length ? 'several events' : 'no published event'} "${wanted}" — use its action_id / trigger_id from the app's page`,
+          { status: null }
+        )
+      }
+      const [match] = found
+      if (version && match.versionid && match.versionid !== version) {
+        console.warn(`viaSocket: ${app.service.name} "${wanted}" is published as ${match.versionid}, not ${version}: reread its page and update the code`)
+      }
+      return match.versionId
+    },
+    /**
+     * The built-in plugs — Run AI Model, Pause Workflow, Memory, scraping, GST and more: every plug
+     * tagged `SDK` in Developer Hub, with its published actions. Live, so a newly tagged plug appears
+     * without a release.
+     */
+    listBuiltIn: async (): Promise<BuiltInApp[]> => {
+      const pages = await Promise.all(
+        BUILT_IN_PLUG_CATEGORIES.map((category) => this.catalog.list({ category, limit: BUILT_IN_PAGE }))
+      )
+      const apps = [...new Map(pages.flat().map((app) => [app.serviceId, app])).values()].filter((app) => app.serviceId)
+      const withActions = await Promise.all(
+        apps.map(async (app) => {
+          const versions = await this.catalog.versions(app.serviceId)
+          if (!versions?.actions.length) return null
+          return {
+            serviceId: app.serviceId,
+            slug: app.slug ?? '',
+            name: versions.service.name || app.name,
+            iconUrl: versions.service.icon_url || app.iconUrl,
+            requiresAuth: versions.service.requires_auth !== false && `${versions.service.auth_type ?? ''}`.toLowerCase() !== 'noauth',
+            actions: versions.actions
+          }
+        })
+      )
+      return withActions.filter((app): app is BuiltInApp => app !== null).sort((a, b) => a.name.localeCompare(b.name))
     },
     /**
      * One app and every published action and trigger of it, as `{ service, actions, triggers }`.
@@ -185,6 +281,87 @@ export class ViaSocket {
       fetchImpl: this.transport
     })
     return payload.data
+  }
+
+  /**
+   * One real event of a trigger for one connection: exactly what a handler reads at
+   * `context.req.body`, and what an automation's steps read there. Map from it, never from the
+   * catalog's `sample_output`, which the connector's author recorded on another account. It takes
+   * the `trigger_id` (a version id answers "No response"); `authType` is the app's
+   * `service.auth_type` from `catalog.versions()`; `inputData` is the trigger's own settings, the
+   * same the subscription will carry. No token, but the `auth_id` is a credential: server only.
+   */
+  async sampleEvent<T = Record<string, unknown>>(
+    triggerId: string,
+    authId: string,
+    authType: string,
+    inputData: Record<string, unknown> = {}
+  ): Promise<T> {
+    const query = new URLSearchParams({
+      action_id: required('triggerId', triggerId),
+      auth_id: required('authId', authId),
+      authType: required('authType', authType)
+    })
+    const { data } = await request<Record<string, unknown>>({
+      method: 'POST',
+      url: `${this.runBaseUrl}/func/${SAMPLE_EVENT_FUNCTION}?${query}`,
+      body: JSON.stringify({ context: { inputData: inputData ?? {} } }),
+      fetchImpl: this.transport
+    })
+    // An unreadable connection (revoked, another user's, the wrong auth_id) answers 200 with the
+    // failure nested inside, as list-options does.
+    const nested = (data as { response?: { status?: number | string; data?: { message?: string } } } | null)?.response
+    if (nested && Number(nested.status) >= 400) {
+      throw new ViaSocketError(`sampleEvent: ${nested.data?.message || 'the connection could not be read'}`, {
+        status: Number(nested.status),
+        body: data
+      })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data) || (data as { message?: string }).message === 'No response') {
+      throw new ViaSocketError(
+        `sampleEvent: no event came back (${JSON.stringify(data)?.slice(0, 120)}) — pass the trigger_id, not its version id, and a live auth_id`,
+        { status: null, body: data }
+      )
+    }
+    // `viasocket_help` is a note for the developer, not a field of the event.
+    const { viasocket_help: _help, ...event } = data
+    return event as T
+  }
+
+  private async resolveSlug(slug: string): Promise<string> {
+    let data: { data?: { plugins?: Record<string, { rowid?: string }> } } | undefined
+    try {
+      ;({ data } = await request<{ data?: { plugins?: Record<string, { rowid?: string }> } }>({
+        method: 'GET',
+        url: `${CATALOG.slug}?service=${encodeURIComponent(slug)}`,
+        fetchImpl: this.transport,
+        signal: AbortSignal.timeout(SLUG_TIMEOUT_MS)
+      }))
+    } catch (error) {
+      if ((error as Error)?.name !== 'TimeoutError') throw error
+    }
+    const serviceId = data?.data?.plugins?.[slug]?.rowid
+    if (!serviceId) {
+      throw new ViaSocketError(`No viaSocket app has the slug "${slug}" — slugs are exact and case-sensitive; find it with catalog.list()`, {
+        status: null
+      })
+    }
+    return serviceId
+  }
+
+  private cachedVersions(serviceId: string): Promise<CatalogVersions | null> {
+    const cached = this.versionsCache.get(serviceId)
+    if (cached && Date.now() - cached.at < VERSIONS_TTL_MS) return cached.value
+    const value = this.catalog.versions(serviceId)
+    this.versionsCache.set(serviceId, { at: Date.now(), value })
+    // Neither a failure nor an empty answer is kept: one bad read must not block runs for ten minutes.
+    value.then(
+      (app) => {
+        if (!app) this.versionsCache.delete(serviceId)
+      },
+      () => this.versionsCache.delete(serviceId)
+    )
+    return value
   }
 }
 
@@ -327,30 +504,60 @@ export class UserScope {
   }
 
   /**
-   * The script_id of an app this user already enabled, or null. Call it before `enable()` —
-   * enabling twice leaves you with two script_ids for one app.
+   * The script_id of an app this user already enabled — active or paused — or null. Call it before
+   * `enable()`: enabling twice leaves you with two script_ids for one app. A paused one is resumed
+   * with `enableFlow()`, never enabled again.
    */
   async findEnabled(serviceId: string): Promise<string | null> {
     const flows = await this.listFlows()
-    return flows.find((flow) => flow.serviceId === required('serviceId', serviceId) && flow.status === 'active')?.id ?? null
+    const wanted = required('serviceId', serviceId)
+    return flows.find((flow) => flow.serviceId === wanted && (flow.status === 'active' || flow.status === 'paused'))?.id ?? null
   }
 
-  /** Turns a flow off (0) or back on (1): an enabled app, or a trigger subscription. */
+  /**
+   * Pauses (2), resumes or restores (1), or deletes (0) one flow: an enabled app, a trigger
+   * subscription or an automation. A deleted flow is listed as `deleted` and can be restored with 1.
+   */
   async setFlowStatus(scriptId: string, status: FlowStatus): Promise<{ id: string; status: string }> {
-    const { data } = await this.call<{ id: string; status: string }>(
-      'PUT',
-      `/embed/updatestatus/${required('scriptId', scriptId)}?status=${status}`
-    )
-    // The response is the whole flow record; nothing else in it is anything a caller acts on.
-    return { id: data.id, status: String(data.status) }
+    const id = required('scriptId', scriptId)
+    try {
+      const { data } = await this.call<{ id: string; status: string }>('PUT', `/embed/updatestatus/${id}?status=${status}`)
+      // The response is the whole flow record; nothing else in it is anything a caller acts on.
+      return { id: data.id, status: String(data.status) }
+    } catch (error) {
+      // Already in that state: what the caller asked for is true, so it is not a failure.
+      if (error instanceof ViaSocketError && /already set/i.test(error.message)) return { id, status: String(status) }
+      throw error
+    }
   }
 
+  /** Pauses a flow (status 2). Before 0.7.0 this sent 0, which deletes. */
   disableFlow(scriptId: string) {
+    return this.setFlowStatus(scriptId, 2)
+  }
+
+  /** Resumes a paused flow, or restores a deleted one (status 1). */
+  enableFlow(scriptId: string) {
+    return this.setFlowStatus(scriptId, 1)
+  }
+
+  /** Deletes a flow (status 0). It stays listed as `deleted`; `enableFlow` restores it. */
+  deleteFlow(scriptId: string) {
     return this.setFlowStatus(scriptId, 0)
   }
 
-  enableFlow(scriptId: string) {
-    return this.setFlowStatus(scriptId, 1)
+  /** Renames a flow; `meta` comes back as `metadata` in the prebuilt UI's flow events. */
+  async renameFlow(scriptId: string, params: RenameFlowParams): Promise<{ id: string; title: string; description: string }> {
+    const body: Record<string, unknown> = { title: required('title', params?.title) }
+    if (params.description !== undefined) body.description = params.description
+    if (params.meta !== undefined) body.meta = params.meta
+    const { data } = await this.call<{ id: string; title: string; description?: string }>(
+      'PUT',
+      `/projects/updateflowembed/${required('scriptId', scriptId)}`,
+      body
+    )
+    // The response is the whole script, code included; only these are anything a caller acts on.
+    return { id: data.id, title: data.title, description: data.description ?? '' }
   }
 
   /**

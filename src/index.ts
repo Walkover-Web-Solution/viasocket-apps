@@ -7,6 +7,8 @@
  *   const user = viasocket.user(uniqueIdentifier)
  *
  *   const token = await user.token()                                  // for the connect popup
+ *   const serviceId = await viasocket.catalog.serviceIdFor('slack')    // an app, by its slug
+ *   const actionVersionId = await viasocket.catalog.versionIdFor(serviceId, 'row1jrbor', 'V107')
  *   const { scriptId } = await user.enable(serviceId, authId)          // once, for actions
  *   const { options } = await user.listOptions(actionVersionId, {...}) // fill a dropdown
  *   const result = await viasocket.runAction(scriptId, actionVersionId, inputData)
@@ -16,7 +18,7 @@
  * The browser half — opening the connect popup — lives at 'viasocket-apps/browser'.
  */
 
-export { ViaSocket, UserScope } from './client.js'
+export { ViaSocket, UserScope, BUILT_IN_PLUG_CATEGORIES } from './client.js'
 export { ViaSocketError } from './errors.js'
 export { signEmbedToken } from './token.js'
 export type { SignEmbedTokenInput } from './token.js'
@@ -30,6 +32,7 @@ export type {
   AiSendParams,
   AiThread,
   AiTool,
+  BuiltInApp,
   CatalogApp,
   CatalogAction,
   CatalogService,
@@ -44,6 +47,7 @@ export type {
   ListOptionsParams,
   ListOptionsResult,
   Option,
+  RenameFlowParams,
   SubscribeParams,
   SubscribeResult,
   UpdateSubscriptionParams,
