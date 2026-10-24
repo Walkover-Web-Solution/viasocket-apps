@@ -330,3 +330,31 @@ export interface AiRtLayerToken {
   channelPrefix: string
   expiresIn: string
 }
+
+/** What a token may do in one AI-memory space: search it, also add to it, or also change and delete in it. */
+export type MemoryAccess = 'read' | 'append' | 'write'
+
+/** Per-user options for `viasocket.user(id, options)`. */
+export interface UserOptions {
+  /**
+   * Shared AI-memory spaces this user's memory token reaches, beside their own: `{ 'teams/acme':
+   * 'append', 'product-truth': 'read', 'customers/*': 'read' }`. Up to 20. Signed into the embed token
+   * as `memory_spaces`; give a user the same grants on every call.
+   */
+  memorySpaces?: Record<string, MemoryAccess>
+}
+
+/** A token for the AI memory service, for this user. Bearer auth on every call to `url`. */
+export interface MemoryToken {
+  token: string
+  /** The memory service, `https://memory-api.viasocket.com`. */
+  url: string
+  /** Its MCP endpoint, for an agent that uses memory as tools. */
+  mcpUrl: string
+  /** Seconds it lasts. */
+  expiresIn: number
+  /** The user's own space. viaSocket names it, so it is not `users/<your id>`: read it from here. */
+  me: string
+  /** Every space the token reaches and its access, the user's own included. */
+  spaces: Record<string, MemoryAccess>
+}

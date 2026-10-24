@@ -18,7 +18,7 @@ import { ViaSocketError } from './errors.js'
 import type { Envelope } from './types.js'
 
 export interface RequestOptions {
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   url: string
   /** The embed token. Omitted for the action runner, where the script_id is the credential. */
   token?: string

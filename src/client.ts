@@ -28,6 +28,7 @@ import type {
   EnableResult,
   Envelope,
   Flow,
+  MemoryToken,
   FlowStatus,
   ListOptionsParams,
   ListAppsParams,
@@ -37,6 +38,7 @@ import type {
   SubscribeParams,
   SubscribeResult,
   UpdateSubscriptionParams,
+  UserOptions,
   ViaSocketOptions
 } from './types.js'
 
@@ -252,20 +254,21 @@ export class ViaSocket {
   }
 
   /** Everything that is done for one of your end users. */
-  user(uniqueIdentifier: string): UserScope {
-    return new UserScope(this, required('uniqueIdentifier', uniqueIdentifier))
+  user(uniqueIdentifier: string, options: UserOptions = {}): UserScope {
+    return new UserScope(this, required('uniqueIdentifier', uniqueIdentifier), options)
   }
 
   /**
    * A signed embed token for one end user — what the connect popup on your frontend needs.
    * Sign on demand per request; there is nothing to gain from caching it in the browser.
    */
-  tokenFor(uniqueIdentifier: string): Promise<string> {
+  tokenFor(uniqueIdentifier: string, options: UserOptions = {}): Promise<string> {
     return signEmbedToken({
       orgId: this.orgId,
       projectId: this.projectId,
       uniqueIdentifier: required('uniqueIdentifier', uniqueIdentifier),
-      secret: this.secret
+      secret: this.secret,
+      memorySpaces: options.memorySpaces
     })
   }
 
@@ -373,15 +376,18 @@ export class ViaSocket {
  */
 export class UserScope {
   private tokenPromise: Promise<string> | undefined
+  /** The memory token `memory.call` reuses, until a minute before it runs out. */
+  private memoryCache: { token: Promise<MemoryToken>; expiresAt: number } | undefined
 
   constructor(
     private readonly client: ViaSocket,
-    readonly uniqueIdentifier: string
+    readonly uniqueIdentifier: string,
+    private readonly options: UserOptions = {}
   ) {}
 
   /** The signed embed token for this user. */
   token(): Promise<string> {
-    this.tokenPromise ??= this.client.tokenFor(this.uniqueIdentifier)
+    this.tokenPromise ??= this.client.tokenFor(this.uniqueIdentifier, this.options)
     return this.tokenPromise
   }
 
@@ -661,6 +667,73 @@ export class UserScope {
         '/embed/ai/rtlayer-token'
       )
       return { token: data.token, orgId: data.org_id, serviceId: data.service_id, channelPrefix: data.channel_prefix, expiresIn: data.expires_in }
+    }
+  }
+
+  /**
+   * AI memory for this user: what the product's AI remembers about them, and the shared spaces
+   * granted with `viasocket.user(id, { memorySpaces })`. Recall with `POST /search` before an answer,
+   * `POST /learn` after it. Every path and body is https://memory-api.viasocket.com/guide.md.
+   */
+  readonly memory = {
+    /**
+     * A fresh memory token, lasting `expiresIn` seconds (60 to 86400, default 3600). Take a
+     * separate short one for an AI's tool headers or an agent; `call` keeps its own.
+     */
+    token: async (params: { expiresIn?: number } = {}): Promise<MemoryToken> => {
+      const expiresIn = params.expiresIn ?? 3600
+      if (!Number.isInteger(expiresIn) || expiresIn < 60 || expiresIn > 86400) {
+        throw new ViaSocketError('memory.token: expiresIn is whole seconds, 60 to 86400', { status: null })
+      }
+      const { data } = await this.call<{
+        token: string
+        url: string
+        mcp_url: string
+        expires_in: number
+        me: string
+        spaces: MemoryToken['spaces']
+      }>('GET', `/embed/ai/memory-token?expires_in=${expiresIn}`)
+      return { token: data.token, url: trimSlash(data.url), mcpUrl: data.mcp_url, expiresIn: data.expires_in, me: data.me, spaces: data.spaces ?? {} }
+    },
+
+    /**
+     * One call to the memory service as this user: `memory.call('POST', '/search', { query })`.
+     * Returns the service's reply. The token is reused until a minute before it runs out, and taken
+     * again once if the service refuses it.
+     */
+    call: async <T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> => {
+      if (!required('path', path).startsWith('/')) throw new ViaSocketError('memory.call: path starts with /', { status: null })
+      for (let attempt = 0; ; attempt++) {
+        const { token, url } = await this.memoryToken()
+        try {
+          const { data } = await request<T>({
+            method,
+            url: `${url}${path}`,
+            token: `Bearer ${token}`,
+            body: body === undefined ? undefined : JSON.stringify(body),
+            fetchImpl: this.client.transport
+          })
+          return data
+        } catch (error) {
+          if (attempt || (error as ViaSocketError)?.status !== 401) throw error
+          this.memoryCache = undefined
+        }
+      }
+    }
+  }
+
+  private async memoryToken(): Promise<MemoryToken> {
+    const cached = this.memoryCache
+    if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token
+    const entry = { token: this.memory.token(), expiresAt: Infinity }
+    this.memoryCache = entry
+    try {
+      const value = await entry.token
+      entry.expiresAt = Date.now() + value.expiresIn * 1000
+      return value
+    } catch (error) {
+      if (this.memoryCache === entry) this.memoryCache = undefined
+      throw error
     }
   }
 

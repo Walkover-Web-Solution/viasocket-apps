@@ -161,11 +161,35 @@ const socket = await user.ai.rtlayerToken() // for a chat UI: the browser subscr
 The whole contract — tools, JSON answers, the websocket path and what arrives on it — is
 [flow.viasocket.com/documentation/ai.md](https://flow.viasocket.com/documentation/ai.md).
 
+## AI memory
+
+What your AI remembers about each user — their rules, facts and corrections — and what a team or
+customer account knows. Recall before answering, learn after:
+
+```js
+const user = viasocket.user('maya', { memorySpaces: { 'teams/acme': 'append' } }) // shared spaces: optional
+
+const { me } = await user.memory.token() // the user's own space; viaSocket names it
+const recalled = await user.memory.call('POST', '/search', { query: message })
+const reply = await user.ai.send({ threadId, message, prompt: `${BASE_PROMPT}
+
+${recalled.prompt}` })
+await user.memory.call('POST', '/learn', {
+  space: me,
+  messages: [{ role: 'user', content: message }, { role: 'assistant', content: reply.content }],
+  source: { type: 'thread', id: reply.threadId }
+})
+```
+
+`memory.call` takes any path of the memory service and reuses one memory token until it runs out.
+Every path, body and reply is in
+[memory-api.viasocket.com/guide.md](https://memory-api.viasocket.com/guide.md).
+
 ## Methods
 
 | Call | What it does |
 | --- | --- |
-| `viasocket.user(id)` | Scope every call below to one end user. |
+| `viasocket.user(id, { memorySpaces })` | Scope every call below to one end user. `memorySpaces` grants shared AI-memory spaces (`{ 'teams/acme': 'append' }`); omit it for none. |
 | `user.token()` | Signed embed token for that user; hand it to the frontend. |
 | `user.enable(serviceId, authId)` | Turn a connection into a `scriptId` for running actions. Once per connection. |
 | `user.findEnabled(serviceId)` | The `scriptId` if this app is already enabled, else `null`. Call before `enable`. |
@@ -189,7 +213,9 @@ The whole contract — tools, JSON answers, the websocket path and what arrives 
 | `user.ai.send({ message, threadId, prompt, tools, responseType, delivery })` | One message to the assistant we run for this user. Returns `{ threadId, messageId, content, finishReason }`, or `{ threadId, messageId, channel }` with `delivery: 'rtlayer'`. |
 | `user.ai.threads()` / `user.ai.history(threadId, { page })` | This user's threads, newest first (`title` is `null` until the AI writes it); one thread's messages, 40 exchanges a page. |
 | `user.ai.rtlayerToken()` | A 48-hour subscribe token for the browser, with the `channelPrefix` every thread's channel starts with. |
-| `signEmbedToken({ orgId, projectId, uniqueIdentifier, secret })` | The signing step on its own, if you want it without a client. |
+| `user.memory.token({ expiresIn })` | A fresh AI-memory token, `{ token, url, mcpUrl, me, spaces, expiresIn }`; 60 to 86400 seconds, default 3600. Take a short one for an AI's tool headers or an agent. |
+| `user.memory.call(method, path, body)` | One call to the memory service as this user (`'POST', '/search', { query }`). Returns its reply; the token is reused and renewed for you. |
+| `signEmbedToken({ orgId, projectId, uniqueIdentifier, secret, memorySpaces })` | The signing step on its own, if you want it without a client. |
 
 **Upgrading from 0.6:** `disableFlow` now pauses a flow (status `2`). In 0.6 it sent status `0`,
 which deletes — a deleted flow is still listed as `deleted` and `enableFlow` restores it.

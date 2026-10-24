@@ -469,3 +469,53 @@ test('ai.rtlayerToken maps the subscribe token', async () => {
   assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/ai/rtlayer-token')
   assert.equal(calls[0].method, 'GET')
 })
+
+const memoryTokenReply = (token = 'mem1', expires_in = 3600) =>
+  ok({ token, url: 'https://memory-api.viasocket.com/', mcp_url: 'https://memory-api.viasocket.com/mcp', expires_in, me: 'users/u9', spaces: { 'users/u9': 'write' } })
+
+test('memory.token exchanges the embed token and maps the reply', async () => {
+  const { user, calls } = client([memoryTokenReply()])
+  assert.deepEqual(await user.memory.token({ expiresIn: 900 }), {
+    token: 'mem1', url: 'https://memory-api.viasocket.com', mcpUrl: 'https://memory-api.viasocket.com/mcp', expiresIn: 3600, me: 'users/u9', spaces: { 'users/u9': 'write' }
+  })
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/ai/memory-token?expires_in=900')
+  assert.equal(calls[0].headers.authorization, await user.token())
+  await assert.rejects(() => user.memory.token({ expiresIn: 30 }), /60 to 86400/)
+})
+
+test('memory.call sends Bearer to the memory service, reuses the token, and returns the bare reply', async () => {
+  const { user, calls } = client([memoryTokenReply(), { status: 200, body: { prompt: 'p', results: [] } }, { status: 200, body: { deleted: 1 } }])
+  assert.deepEqual(await user.memory.call('POST', '/search', { query: 'crm' }), { prompt: 'p', results: [] })
+  assert.deepEqual(await user.memory.call('DELETE', '/notes', { space: 'users/u9', path: 'facts/x' }), { deleted: 1 })
+  assert.equal(calls.length, 3, 'one token for both calls')
+  assert.equal(calls[1].url, 'https://memory-api.viasocket.com/search')
+  assert.equal(calls[1].headers.authorization, 'Bearer mem1')
+  assert.deepEqual(JSON.parse(calls[1].body), { query: 'crm' })
+  assert.equal(calls[2].method, 'DELETE')
+})
+
+test('memory.call takes a new token once when the service refuses one, and surfaces its message', async () => {
+  const refused = { status: 401, body: { status: 'error', success: false, message: 'The memory token has expired', data: null } }
+  const { user, calls } = client([memoryTokenReply('old'), refused, memoryTokenReply('new'), { status: 200, body: { notes: [] } }])
+  assert.deepEqual(await user.memory.call('GET', '/index?space=users/u9'), { notes: [] })
+  assert.equal(calls[3].headers.authorization, 'Bearer new')
+
+  const again = client([memoryTokenReply('a'), refused, memoryTokenReply('b'), refused])
+  await assert.rejects(() => again.user.memory.call('GET', '/index'), (error) => {
+    assert.ok(error instanceof ViaSocketError)
+    assert.equal(error.status, 401)
+    assert.match(error.message, /has expired/)
+    return true
+  })
+  await assert.rejects(() => user.memory.call('GET', 'index'), /starts with \//)
+})
+
+test('memorySpaces are signed into the user token as memory_spaces', async () => {
+  const { viasocket } = client([])
+  const payload = async (scope) => JSON.parse(Buffer.from((await scope.token()).split('.')[1], 'base64url').toString())
+  assert.deepEqual(await payload(viasocket.user('maya', { memorySpaces: { 'teams/acme': 'append' } })), {
+    org_id: '4160', project_id: 'proj9U0smb62', unique_identifier: 'maya', memory_spaces: { 'teams/acme': 'append' }
+  })
+  assert.equal('memory_spaces' in (await payload(viasocket.user('maya'))), false)
+  await assert.rejects(() => viasocket.user('maya', { memorySpaces: { 'teams/acme': 'admin' } }).token(), /read, append or write/)
+})

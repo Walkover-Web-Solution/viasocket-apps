@@ -46,10 +46,13 @@ export type {
   ListAppsParams,
   ListOptionsParams,
   ListOptionsResult,
+  MemoryAccess,
+  MemoryToken,
   Option,
   RenameFlowParams,
   SubscribeParams,
   SubscribeResult,
   UpdateSubscriptionParams,
+  UserOptions,
   ViaSocketOptions
 } from './types.js'
