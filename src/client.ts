@@ -11,6 +11,7 @@
 import { ViaSocketError } from './errors.js'
 import { request } from './http.js'
 import { signEmbedToken } from './token.js'
+import { jwtOf, loginRequest, toLoginUser } from './login.js'
 import type {
   AiAccepted,
   AiHistoryPage,
@@ -33,6 +34,7 @@ import type {
   ListOptionsParams,
   ListAppsParams,
   ListOptionsResult,
+  LoginUser,
   Option,
   RenameFlowParams,
   SubscribeParams,
@@ -250,6 +252,33 @@ export class ViaSocket {
         actions: Array.isArray(body.actions) ? (body.actions as CatalogAction[]) : [],
         triggers: Array.isArray(body.triggers) ? (body.triggers as CatalogTrigger[]) : []
       }
+    }
+  }
+
+  /**
+   * Login, users and organisations from 36Blocks, with a signed-in user's `proxy_auth_token` (from the
+   * login callback; keep it in an HTTP-only cookie). Server side, like everything else here.
+   */
+  readonly login = {
+    /** The signed-in user, their organisations, and the current one with their role and permissions. */
+    details: async (proxyAuthToken: string): Promise<LoginUser> =>
+      toLoginUser(await loginRequest(this.transport, 'GET', '/c/getDetails', proxyAuthToken)),
+
+    /**
+     * Moves the session to another of the user's organisations. Returns the JWT for that organisation's
+     * session (use it as the session from now on) and the reply as 36Blocks sent it.
+     */
+    switchCompany: async (proxyAuthToken: string, companyId: number | string): Promise<{ jwt: string | null; reply: unknown }> => {
+      if (companyId === undefined || companyId === null || `${companyId}`.trim() === '') {
+        throw new ViaSocketError('login.switchCompany: companyId is required', { status: null })
+      }
+      const reply = await loginRequest(this.transport, 'POST', '/c/switchCompany', proxyAuthToken, { company_ref_id: companyId })
+      return { jwt: jwtOf(reply), reply }
+    },
+
+    /** Ends the session: the token stops working. Clear the product's cookie after it. */
+    logout: async (proxyAuthToken: string): Promise<void> => {
+      await loginRequest(this.transport, 'DELETE', '/c/logout', proxyAuthToken)
     }
   }
 

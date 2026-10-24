@@ -519,3 +519,49 @@ test('memorySpaces are signed into the user token as memory_spaces', async () =>
   assert.equal('memory_spaces' in (await payload(viasocket.user('maya'))), false)
   await assert.rejects(() => viasocket.user('maya', { memorySpaces: { 'teams/acme': 'admin' } }).token(), /read, append or write/)
 })
+
+test('login.details sends the proxy_auth_token header and maps the user', async () => {
+  const raw = {
+    data: [{
+      id: 99152, name: 'Maya', email: 'maya@acme.com', client_id: 8,
+      c_companies: [{ id: 61434, name: 'Acme', role_id: 1, role_name: 'Owner' }],
+      currentCompany: { id: 61434, role: { id: 1, name: 'Owner', is_default: true }, permissions: ['update_c_company'] }
+    }],
+    status: 'success', hasError: false, errors: []
+  }
+  const { viasocket, calls } = client([{ status: 200, body: raw }])
+  assert.deepEqual(await viasocket.login.details('pat-1'), {
+    id: 99152, name: 'Maya', email: 'maya@acme.com',
+    companies: [{ id: 61434, name: 'Acme', roleId: 1, roleName: 'Owner' }],
+    currentCompany: { id: 61434, role: { id: 1, name: 'Owner', isDefault: true }, permissions: ['update_c_company'] }
+  })
+  assert.equal(calls[0].url, 'https://routes.msg91.com/api/c/getDetails')
+  assert.equal(calls[0].method, 'GET')
+  assert.equal(calls[0].headers.proxy_auth_token, 'pat-1')
+})
+
+test('login refusals surface 36Blocks\' own message and status', async () => {
+  const refused = { status: 401, body: { data: { message: 'Unauthorized' }, status: 'error', hasError: true, errors: { message: 'Unauthorized' } } }
+  const { viasocket } = client([refused])
+  await assert.rejects(() => viasocket.login.details('expired'), (error) => {
+    assert.ok(error instanceof ViaSocketError)
+    assert.equal(error.status, 401)
+    assert.equal(error.message, 'Unauthorized')
+    return true
+  })
+  await assert.rejects(() => viasocket.login.details(''), /proxy_auth_token is required/)
+})
+
+test('login.switchCompany posts company_ref_id and finds the jwt; logout sends DELETE', async () => {
+  const { viasocket, calls } = client([
+    { status: 200, body: { data: { jwt: 'jwt-61434' }, status: 'success', hasError: false } },
+    { status: 200, body: { data: { message: 'logged out' }, status: 'success', hasError: false } }
+  ])
+  const switched = await viasocket.login.switchCompany('pat-1', 61434)
+  assert.equal(switched.jwt, 'jwt-61434')
+  assert.deepEqual(JSON.parse(calls[0].body), { company_ref_id: 61434 })
+  await viasocket.login.logout('pat-1')
+  assert.equal(calls[1].method, 'DELETE')
+  assert.equal(calls[1].url, 'https://routes.msg91.com/api/c/logout')
+  await assert.rejects(() => viasocket.login.switchCompany('pat-1', ''), /companyId is required/)
+})

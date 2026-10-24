@@ -46,6 +46,8 @@ export type {
   ListAppsParams,
   ListOptionsParams,
   ListOptionsResult,
+  LoginCompany,
+  LoginUser,
   MemoryAccess,
   MemoryToken,
   Option,

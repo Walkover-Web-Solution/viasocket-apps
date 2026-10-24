@@ -185,6 +185,24 @@ await user.memory.call('POST', '/learn', {
 Every path, body and reply is in
 [memory-api.viasocket.com/guide.md](https://memory-api.viasocket.com/guide.md).
 
+## Login and organisations
+
+Sign-up, login, profiles, team members and organisations with roles, from 36Blocks (free up to 2,500
+users): its screens run in the browser, and your server makes these calls with the signed-in user's
+`proxy_auth_token`, which the login callback hands you. Keep the token in an HTTP-only cookie.
+
+```js
+const me = await viasocket.login.details(proxyAuthToken)
+// { id, name, email, companies: [{ id, name, roleId, roleName }], currentCompany: { id, role, permissions } }
+const user = viasocket.user(String(me.id)) // the login decides whose connections and flows they are
+
+const { jwt } = await viasocket.login.switchCompany(proxyAuthToken, companyId) // the session for that organisation
+await viasocket.login.logout(proxyAuthToken) // then clear your cookie
+```
+
+The screens, the callback and the setup are in
+[flow.viasocket.com/documentation/skill/login-and-orgs.md](https://flow.viasocket.com/documentation/skill/login-and-orgs.md).
+
 ## Methods
 
 | Call | What it does |
@@ -215,6 +233,9 @@ Every path, body and reply is in
 | `user.ai.rtlayerToken()` | A 48-hour subscribe token for the browser, with the `channelPrefix` every thread's channel starts with. |
 | `user.memory.token({ expiresIn })` | A fresh AI-memory token, `{ token, url, mcpUrl, me, spaces, expiresIn }`; 60 to 86400 seconds, default 3600. Take a short one for an AI's tool headers or an agent. |
 | `user.memory.call(method, path, body)` | One call to the memory service as this user (`'POST', '/search', { query }`). Returns its reply; the token is reused and renewed for you. |
+| `viasocket.login.details(proxyAuthToken)` | The signed-in 36Blocks user, their organisations, and the current one with their role and `permissions`. A bad or ended session throws a `ViaSocketError` with status 401. |
+| `viasocket.login.switchCompany(proxyAuthToken, companyId)` | Moves the session to another of the user's organisations; returns `{ jwt, reply }`, the JWT being that organisation's session. |
+| `viasocket.login.logout(proxyAuthToken)` | Ends the 36Blocks session. |
 | `signEmbedToken({ orgId, projectId, uniqueIdentifier, secret, memorySpaces })` | The signing step on its own, if you want it without a client. |
 
 **Upgrading from 0.6:** `disableFlow` now pauses a flow (status `2`). In 0.6 it sent status `0`,

@@ -331,6 +331,26 @@ export interface AiRtLayerToken {
   expiresIn: string
 }
 
+/** One organisation a signed-in user belongs to, from 36Blocks. */
+export interface LoginCompany {
+  id: number
+  name: string
+  roleId: number | null
+  roleName: string | null
+}
+
+/** The signed-in user, from 36Blocks' `/c/getDetails`. */
+export interface LoginUser {
+  /** 36Blocks' id for the user: a stable `unique_identifier` for a per-person viaSocket token. */
+  id: number
+  name: string
+  email: string
+  /** Every organisation the user is in, with their role in it. */
+  companies: LoginCompany[]
+  /** The organisation the session is in now, with the user's role and permissions there; null when none. */
+  currentCompany: { id: number; role: { id: number; name: string; isDefault: boolean } | null; permissions: string[] } | null
+}
+
 /** What a token may do in one AI-memory space: search it, also add to it, or also change and delete in it. */
 export type MemoryAccess = 'read' | 'append' | 'write'
 
