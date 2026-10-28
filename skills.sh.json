@@ -3,8 +3,8 @@
   "notGrouped": "bottom",
   "groupings": [
     {
-      "title": "Integrate apps into your product",
-      "description": "Connect any of 2,300+ apps for your end users, run actions, react to events, or mount viaSocket's prebuilt UI — through viaSocket.",
+      "title": "viaSocket: integrations, automations, AI, AI memory, login, plugs",
+      "description": "One skill, three jobs. In your product: let users connect any of 2,300+ apps, run actions, react to events, create automations per user, add an AI assistant on any model, AI memory per user, and login with teams and organisations. For yourself: build automations in your own viaSocket workspace. For the platform: build or fix a plug (an app's integration) in the Developer Hub.",
       "skills": ["viasocket-integrations"]
     }
   ]

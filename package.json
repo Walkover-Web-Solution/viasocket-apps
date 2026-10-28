@@ -1,16 +1,21 @@
 {
   "name": "viasocket-apps",
-  "version": "0.9.0",
-  "description": "Server-side client for the viaSocket Apps API: let your users connect Slack, GitHub, Google Sheets or any of 2,300+ apps from your own product, then run actions and receive events through one API.",
+  "version": "0.10.0",
+  "description": "viaSocket for your product and your coding agent: let your users connect any of 2,300+ apps, run actions and react to events; an AI assistant on any model with your endpoints as tools; AI memory per user; login, teams and organisations; automations per user; plus the skill for building your own automations and plugs on viaSocket, and `npx viasocket-apps login`.",
   "keywords": [
     "viasocket",
     "integrations",
+    "automation",
+    "ai-agent",
+    "ai-memory",
+    "login",
     "oauth",
     "api",
     "webhooks",
     "slack",
     "github",
-    "google-sheets"
+    "google-sheets",
+    "agent-skill"
   ],
   "license": "MIT",
   "author": "Walkover Web Solution",
@@ -40,14 +45,18 @@
       "require": "./dist/cjs/browser.js"
     }
   },
+  "bin": {
+    "viasocket-apps": "bin/viasocket.mjs"
+  },
   "files": [
     "dist",
+    "bin",
     "README.md"
   ],
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/finish-build.mjs",
-    "test": "npm run build && node --test test/token.test.mjs test/client.test.mjs test/browser.test.mjs",
+    "test": "npm run build && node --test test/token.test.mjs test/client.test.mjs test/browser.test.mjs test/cli.test.mjs",
     "prepublishOnly": "npm test"
   },
   "devDependencies": {

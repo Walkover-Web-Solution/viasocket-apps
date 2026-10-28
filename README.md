@@ -1,9 +1,20 @@
 # viasocket-apps
 
-Server-side client for the viaSocket Apps API. Let your users connect Slack, GitHub, Google
-Sheets or any of 2,300+ apps from your own product, then run actions and receive events through
-one API — with the OAuth, token refresh, per-app request shapes, polling and retries handled for
-you.
+viaSocket, for the product you are building and for the coding agent building it. One signing
+secret gives your product:
+
+| what                 | your users get                                                                                                        | where                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **App integrations** | connect Slack, GitHub, Google Sheets or any of 2,300+ apps; your product runs their actions and reacts to their events | this package: [Server](#server), [Events](#events)     |
+| **AI assistant**     | a chat assistant or AI behind a feature, any model, your own endpoints as its tools                                   | this package: [AI assistant](#ai-assistant)            |
+| **AI memory**        | an AI that remembers each user's rules, facts and corrections; they can see and delete it                             | this package: [AI memory](#ai-memory)                  |
+| **Login and orgs**   | sign-up, login, profile, team members and organisations with roles, no users table                                    | `viasocket.login` and the skill's login-and-orgs page  |
+| **Automations**      | multi-step flows across their apps on an event, a schedule or a webhook, created by your product for each user        | the skill's automations page (plain HTTP)              |
+
+The OAuth, token refresh, per-app request shapes, polling, retries and AI billing are viaSocket's
+problem, not yours. The same skill also builds **your own automations** in your viaSocket workspace
+and **plugs** (an app's integration) in the Developer Hub; see [For coding agents](#for-coding-agents),
+and `npx viasocket-apps login` to give an agent a way into your workspace.
 
 Zero dependencies. Node 20+, Bun, Deno and edge runtimes.
 
@@ -49,6 +60,37 @@ It finds every viaSocket id and URL in your code and says whether each names a r
 trigger, is used where its call expects that kind of id (the two ids of an action look alike), and
 whether any viasocket URL was built by hand. No dependencies; exits 1 on a failure, so it can be a
 test. It reads no `.env` file and prints no line of code.
+
+### Set up from the command line
+
+Everything a product needs in `.env`, with one command and one click in the browser:
+
+```sh
+npx viasocket-apps setup
+```
+
+It signs you in (below), then reuses your workspace's embed project, creates one if there is none, or
+asks which with `--project <id>` if there are several, and writes `VIASOCKET_ORG_ID`,
+`VIASOCKET_PROJECT_ID` and `VIASOCKET_EMBED_SECRET` next to `VIASOCKET_AGENT_TOKEN`. It never changes
+billing, limits or an existing project's settings. The dashboard's **Install Code** page shows the same
+values for anyone without Node.js.
+
+### Log in from the command line
+
+An agent working in your own viaSocket workspace (your automations, your plugs) acts as you and needs
+your agent token. Instead of copying it from the dashboard:
+
+```sh
+npx viasocket-apps login
+```
+
+It is the OAuth sign-in the viaSocket MCP uses: it opens viaSocket's authorize page in your browser;
+sign in, pick the workspace, click **Allow**, and the token is written to `.env` as
+`VIASOCKET_AGENT_TOKEN` (and `VIASOCKET_ORG_ID`, if the file has none). The browser redirects only to
+`127.0.0.1`, the exchange is PKCE-bound to this run, and nothing prints the token. `--no-open` prints the URL instead of opening a browser,
+`--env <file>` picks another file, `--timeout <s>` changes the five-minute wait. Without the package:
+`curl -fsSL https://flow.viasocket.com/viasocket-login.mjs -o viasocket-login.mjs && node viasocket-login.mjs`
+is the same command.
 
 ## Server
 
@@ -187,7 +229,7 @@ Every path, body and reply is in
 
 ## Login and organisations
 
-Sign-up, login, profiles, team members and organisations with roles, from 36Blocks (free up to 2,500
+Sign-up, login, profiles, team members and organisations with roles, from 36Blocks (free up to 1,000
 users): its screens run in the browser, and your server makes these calls with the signed-in user's
 `proxy_auth_token`, which the login callback hands you. Keep the token in an HTTP-only cookie.
 

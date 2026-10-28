@@ -1,26 +1,19 @@
 name: Release
 
-# Publishes to npm on every push to main whose package.json version is not on npm yet, then tags it:
-#   npm version patch|minor|major --no-git-tag-version   (bump package.json)
-#   git commit -am "x.y.z: …" && git push
-# A push that keeps the version (docs, the skill file) publishes nothing. The skill reaches
-# skills.sh from this repo directly, with no release.
+# Publishes to npm when a version tag is pushed:
+#   npm version patch|minor|major   (bumps package.json and creates the tag)
+#   git push --follow-tags
 #
-# No token: npm trusted publishing (OIDC). npmjs.com → viasocket-apps → Settings → Trusted
-# publishing names this repo and this file (release.yml). Needs npm 11.5.1+ on Node 22.14+, and
-# id-token: write. Provenance is added automatically for this public repo.
+# Needs one repository secret: NPM_TOKEN, an npm "Automation" token for an account that owns
+# viasocket-apps. --provenance signs the build against this workflow run, which is why
+# id-token: write is granted — it only works from a public repository.
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    tags: ['v*']
 
 permissions:
-  contents: write # the version tag
-  id-token: write # trusted publishing
-
-concurrency:
-  group: release
-  cancel-in-progress: false
+  contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -29,32 +22,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: Is this version on npm yet?
-        id: version
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - run: npm install
+      - run: npm test
+      # The tag and package.json must agree, or a stale tag would republish an old version.
+      - name: Check the tag matches package.json
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if npm view "viasocket-apps@$VERSION" version >/dev/null 2>&1; then
-            echo "viasocket-apps@$VERSION is already on npm; nothing to publish."
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=true" >> "$GITHUB_OUTPUT"
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$PKG" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG}" >&2
+            exit 1
           fi
-      - if: steps.version.outputs.publish == 'true'
-        run: npm install -g npm@latest
-      - if: steps.version.outputs.publish == 'true'
-        run: npm install
-      - if: steps.version.outputs.publish == 'true'
-        run: npm test
-      - if: steps.version.outputs.publish == 'true'
-        run: npm publish --access public
-      - name: Tag the published version
-        if: steps.version.outputs.publish == 'true'
-        run: |
-          TAG="v${{ steps.version.outputs.version }}"
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
-            echo "$TAG already exists."
-          else
-            git tag "$TAG" && git push origin "$TAG"
-          fi
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
