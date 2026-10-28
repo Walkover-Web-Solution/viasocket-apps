@@ -48,6 +48,8 @@ const DEFAULT_API_BASE_URL = 'https://flow-api.viasocket.com'
 /** The AI API's thread id: the product's own string. */
 const AI_THREAD_ID = /^[A-Za-z0-9_-]{1,100}$/
 const AI_MAX_TOOLS = 20
+/** The API refuses more MCP servers than this in one send. */
+const AI_MAX_MCP_SERVERS = 10
 const DEFAULT_RUN_BASE_URL = 'https://flow.sokt.io'
 
 /** The public catalog: no token, the same data in every environment. */
@@ -643,6 +645,14 @@ export class UserScope {
           fields: tool.fields ?? {},
           required_params: tool.requiredParams ?? [],
           tool_and_variable_path: tool.toolAndVariablePath ?? {}
+        }))
+      }
+      if (params.mcpServers?.length) {
+        if (params.mcpServers.length > AI_MAX_MCP_SERVERS) throw new ViaSocketError(`ai.send: at most ${AI_MAX_MCP_SERVERS} MCP servers in one call`, { status: null })
+        body.mcp_servers = params.mcpServers.map((server) => ({
+          name: required('mcpServer.name', server?.name),
+          url: required('mcpServer.url', server?.url),
+          ...(server.headers ? { headers: server.headers } : {})
         }))
       }
       if (params.delivery) body.delivery = params.delivery

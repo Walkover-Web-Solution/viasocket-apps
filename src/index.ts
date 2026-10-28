@@ -25,6 +25,7 @@ export type { SignEmbedTokenInput } from './token.js'
 export type {
   AiAccepted,
   AiHistoryPage,
+  AiMcpServer,
   AiMessage,
   AiReply,
   AiRtLayerToken,

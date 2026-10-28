@@ -398,7 +398,8 @@ test('ai.send POSTs the message with every field renamed as the API takes it, an
         fields: { id: { type: 'string', description: 'Customer id' } },
         requiredParams: ['id']
       }
-    ]
+    ],
+    mcpServers: [{ name: 'acme', url: 'https://mcp.viasocket.com/connector/acme', headers: { Authorization: 'Bearer t' } }]
   })
   assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/ai/message')
   assert.equal(calls[0].method, 'POST')
@@ -421,7 +422,8 @@ test('ai.send POSTs the message with every field renamed as the API takes it, an
         required_params: ['id'],
         tool_and_variable_path: {}
       }
-    ]
+    ],
+    mcp_servers: [{ name: 'acme', url: 'https://mcp.viasocket.com/connector/acme', headers: { Authorization: 'Bearer t' } }]
   })
   assert.deepEqual(reply, { threadId: 'support-7f3a9c', messageId: 'm1', content: 'Order #981 shipped today.', finishReason: 'completed' })
 })

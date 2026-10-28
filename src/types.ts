@@ -249,6 +249,16 @@ export interface AiTool {
   toolAndVariablePath?: Record<string, unknown>
 }
 
+/** One MCP server the assistant may use the tools of: the product's own, or any other. */
+export interface AiMcpServer {
+  /** Shown to the model as the server's name. */
+  name: string
+  /** The server's URL, such as `https://mcp.viasocket.com/connector/acme`. */
+  url: string
+  /** Sent on every call to it: the user's token for a server with a login (`{ Authorization: 'Bearer …' }`). */
+  headers?: Record<string, string>
+}
+
 export interface AiSendParams {
   /** What the user said. */
   message: string
@@ -271,6 +281,8 @@ export interface AiSendParams {
   service?: string
   /** Up to 20. Only the ones this conversation can need. */
   tools?: AiTool[]
+  /** Up to 10 MCP servers whose tools the assistant may call, the product's own MCP server among them. */
+  mcpServers?: AiMcpServer[]
   /** `sync` (default): the answer in the response. `rtlayer`: a 202 and the answer on the thread's websocket channel. */
   delivery?: 'sync' | 'rtlayer'
 }

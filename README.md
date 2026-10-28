@@ -173,6 +173,9 @@ later; if the user then finishes anyway, `onLateSuccess` is called with the same
 
 ## AI assistant
 
+The assistant's tools are the product's own endpoints (`tools`) and any MCP servers (`mcpServers`: name, url,
+headers), the product's own MCP server among them.
+
 A chat assistant we run for each of your users: threads and history kept per user, your prompt per
 call, your own endpoints as its tools — one of which can run an action in the user's apps. Backend
 only, like everything else here: the prompt and the tools' headers are yours.
