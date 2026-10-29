@@ -32,7 +32,7 @@
  */
 import { createServer } from 'node:http'
 import { createHash, randomBytes } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 
@@ -531,6 +531,52 @@ const MCP_NAME = /^[a-z0-9_]{1,45}$/
 const MCP_SLUG = /^[a-z0-9](?:[a-z0-9_-]{0,61}[a-z0-9])$/
 const MCP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
+/**
+ * The skill's MCP page before 2026-10-29.2 told products to keep the ids of a server made by hand in
+ * viasocket.mcp.json: `{ "server" (or "mcpServerId"): "<_id>", "slug", "url", "tools": { "<name>": "<_id>" } }`.
+ * Such a file is the ids file under the old name: its ids, in the ids file's shape, or null for a definition.
+ */
+function legacyIds(raw) {
+  const server = raw?.server ?? raw?.mcpServerId
+  const tools = raw?.tools
+  const toolIds = Boolean(tools) && typeof tools === 'object' && !Array.isArray(tools)
+  // A definition has no server id, and its tools are a list of objects, never names mapped to ids.
+  const namedIds = toolIds && Object.keys(tools).length > 0 && Object.values(tools).every((id) => typeof id === 'string')
+  if (typeof server !== 'string' && !namedIds) return null
+  const ids = { ...raw, tools: toolIds ? tools : {} }
+  delete ids.mcpServerId
+  if (typeof server === 'string') ids.server = server
+  return ids
+}
+
+/** An ids-only definition file: moved to the ids file when there is none, so the next run updates that server instead of making a second. */
+function moveLegacyIds(file, ids, options) {
+  const idsFile = resolve(process.cwd(), options.ids)
+  const what = `${options.file} holds the ids of a server made before the mcp command (the MCP page's earlier layout), not a definition`
+  if (existsSync(idsFile)) {
+    const other = JSON.parse(readFileSync(idsFile, 'utf8'))
+    throw new Error(
+      `${what}, and ${options.ids} exists too (server ${other.server || 'none'}; ${options.file} names ${ids.server || 'none'}). ` +
+        `Keep the ids of the server the product's users have in ${options.ids}, then replace ${options.file} with the definition the MCP page shows, and rerun.`
+    )
+  }
+  const slug = ids.slug || /\/connector\/([^/?#]+)/.exec(String(ids.url || ''))?.[1]
+  if (!ids.server)
+    throw new Error(
+      `${what}, without the server's id. Move it to ${options.ids} with "server": "<the server's _id>", then write the definition the MCP page shows in ${options.file}, and rerun.`
+    )
+  writeFileSync(idsFile, `${JSON.stringify(ids, null, 2)}\n`)
+  unlinkSync(file)
+  throw new Error(
+    [
+      `${what}. Moved it to ${options.ids}, so the next run updates server ${ids.server} instead of creating a second one.`,
+      `Now write the definition in ${options.file} as the MCP page shows${slug ? `, with "slug": "${slug}" to keep the URL` : ''}, and rerun.`,
+      `A tool of ${options.ids} that the definition does not name is removed on that run; use the same tool names to keep them.`,
+      `Skills and prompts the server already has are kept when the definition uses their names.`
+    ].join('\n')
+  )
+}
+
 /** The definition file, checked: what is wrong is said by its key, before anything is created. */
 function readDefinition(options, envFile) {
   const file = resolve(process.cwd(), options.file)
@@ -541,6 +587,8 @@ function readDefinition(options, envFile) {
   } catch (error) {
     throw new Error(`${options.file} is not valid JSON: ${error.message}`)
   }
+  const legacy = legacyIds(raw)
+  if (legacy) moveLegacyIds(file, legacy, options)
   const definition = fillEnv(raw, envFile)
   const fail = (what) => {
     throw new Error(`${options.file}: ${what}`)
@@ -712,12 +760,29 @@ async function syncMcpServer({ token, definition, idsFile, options }) {
 
   const syncWords = async (kind, items, toBody) => {
     const known = ids[`${kind}s`]
+    // A skill or prompt this server already has but the ids file lacks (a lost ids file, or one from the page's earlier
+    // layout) is reused by name, so it is updated instead of made twice. Only this server's: another product's skill of
+    // the same name is never taken over (skill names are unique in the workspace, so creating one then fails, and says so).
+    const onServer = items.some((item) => !known[item.name]) ? await mcpApi(token, 'GET', `/${kind}s/${ids.server}`).catch(() => []) : []
     for (const item of items) {
+      if (!known[item.name]) {
+        const same = (Array.isArray(onServer) ? onServer : []).find((entry) => entry?.name === item.name && entry?._id)
+        if (same) {
+          known[item.name] = String(same._id)
+          save()
+        }
+      }
       const payload = toBody(item)
       const existed = Boolean(known[item.name])
       if (existed) await mcpApi(token, 'PUT', `/${kind}/${known[item.name]}`, payload)
       else {
-        const created = await mcpApi(token, 'POST', `/${kind}`, payload)
+        const created = await mcpApi(token, 'POST', `/${kind}`, payload).catch((error) => {
+          if (kind === 'skill' && (error.status === 409 || /exist|unique|duplicate/i.test(error.message)))
+            throw new Error(
+              `a skill named ${item.name} already exists in this workspace for another server; give this one another name (${error.message})`
+            )
+          throw error
+        })
         if (!created?._id) throw new Error(`${kind} ${item.name} was created but its id was not in the reply`)
         known[item.name] = String(created._id)
         save()

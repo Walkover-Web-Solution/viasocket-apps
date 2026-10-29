@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -363,6 +363,10 @@ async function fakeMcp({ mcpToken = 'mcp_tok' } = {}) {
     }
     for (const kind of ['skill', 'prompt']) {
       const store = state[`${kind}s`]
+      if ((match = path.match(new RegExp(`^/${kind}s/([^/]+)$`))) && req.method === 'GET') {
+        const server = state.servers[match[1]]
+        return json(200, { success: true, data: (server?.[`${kind}Ids`] || []).map((itemId) => store[itemId]).filter(Boolean) })
+      }
       if (path === `/${kind}` && req.method === 'POST') {
         const item = { _id: id(), ...body }
         store[item._id] = item
@@ -537,4 +541,39 @@ test('mcp refuses a bad definition by key before creating anything, and reads ${
   const missing = runMcp([], fake, mcp, dir)
   assert.equal(await missing.exited, 1)
   assert.match(missing.output.text, /login\.clientSecret needs MISSING_SECRET/)
+})
+
+test('mcp moves an ids-only viasocket.mcp.json of the earlier layout, keeps the slug from its URL, and the next run updates that server', async (t) => {
+  const fake = await fakeServer()
+  const mcp = await fakeMcp()
+  t.after(() => fake.server.close())
+  t.after(() => mcp.server.close())
+  const dir = dirname(tempEnv('VIASOCKET_AGENT_TOKEN=tok_abc\nVIASOCKET_MCP_TOKEN=mcp_tok\n'))
+
+  // the server a product made by hand, before the mcp command
+  writeFileSync(join(dir, 'viasocket.mcp.json'), JSON.stringify(DEFINITION))
+  const first = runMcp([], fake, mcp, dir)
+  assert.equal(await first.exited, 0, first.output.text)
+  const ids = JSON.parse(readFileSync(join(dir, 'viasocket.mcp.ids.json'), 'utf8'))
+  writeFileSync(
+    join(dir, 'viasocket.mcp.json'),
+    JSON.stringify({ tools: ids.tools, mcpServerId: ids.server, url: `${mcp.origin}/connector/taskpad`, skillId: ids.skills.daily_review })
+  )
+  rmSync(join(dir, 'viasocket.mcp.ids.json'))
+
+  const moved = runMcp([], fake, mcp, dir)
+  assert.equal(await moved.exited, 1)
+  assert.match(moved.output.text, /Moved it to viasocket\.mcp\.ids\.json, so the next run updates server/)
+  assert.match(moved.output.text, /with "slug": "taskpad" to keep the URL/)
+  assert.equal(JSON.parse(readFileSync(join(dir, 'viasocket.mcp.ids.json'), 'utf8')).server, ids.server)
+  assert.ok(!existsSync(join(dir, 'viasocket.mcp.json')))
+
+  // the definition comes back: same server, same tools, and the skill on the server is found by its name
+  writeFileSync(join(dir, 'viasocket.mcp.json'), JSON.stringify(DEFINITION))
+  const after = runMcp([], fake, mcp, dir)
+  assert.equal(await after.exited, 0, after.output.text)
+  assert.match(after.output.text, /server updated; tool list_tasks updated; tool create_task updated; skill daily_review updated/)
+  assert.equal(Object.keys(mcp.state.servers).length, 1)
+  assert.equal(Object.keys(mcp.state.skills).length, 1, 'the skill was made twice')
+  assert.equal(JSON.parse(readFileSync(join(dir, 'viasocket.mcp.ids.json'), 'utf8')).skills.daily_review, ids.skills.daily_review)
 })
