@@ -3,9 +3,11 @@
   "notGrouped": "bottom",
   "groupings": [
     {
-      "title": "viaSocket: integrations, automations, AI, AI memory, login, plugs",
-      "description": "One skill, three jobs. In your product: let users connect any of 2,300+ apps, run actions, react to events, create automations per user, add an AI assistant on any model, AI memory per user, and login with teams and organisations. For yourself: build automations in your own viaSocket workspace. For the platform: build or fix a plug (an app's integration) in the Developer Hub.",
-      "skills": ["viasocket-integrations"]
+      "title": "viaSocket: app integrations, automations, AI, AI memory, login, MCP servers, plugs",
+      "description": "For the product's users: connect any of 2,300+ apps, run their actions, react to their events, automations per user, an AI assistant on any model, AI memory, and login with teams and organisations. For the signed-in developer: setup in one click, their own automations, an MCP server for the product, and the product as an app on viaSocket.",
+      "skills": [
+        "viasocket-integrations"
+      ]
     }
   ]
 }
