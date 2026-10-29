@@ -71,7 +71,7 @@ npx viasocket-apps setup
 ```
 
 It signs you in (below), then reuses your workspace's embed project, creates one if there is none, or
-asks which with `--project <id>` if there are several, and writes `VIASOCKET_ORG_ID`,
+asks which with `--project <id>` if there are several (`--new` makes a new one for this product), and writes `VIASOCKET_ORG_ID`,
 `VIASOCKET_PROJECT_ID` and `VIASOCKET_EMBED_SECRET` next to `VIASOCKET_AGENT_TOKEN`. It never changes
 billing, limits or an existing project's settings. The dashboard's **Install Code** page shows the same
 values for anyone without Node.js.

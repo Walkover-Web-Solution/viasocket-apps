@@ -86,7 +86,8 @@ async function fakeServer({ projects = [], projectSecrets = {}, projectSecretRou
       return json(200, { success: true, data: project })
     }
     if (url.pathname === '/orgs/83682/token') return json(200, { success: true, data: 'sekret-14chars' })
-    if (url.pathname === '/mcp/agent-token') return json(200, { success: true, data: { token: 'mcp_tok', token_type: 'Bearer', expires_in: 86400 } })
+    if (url.pathname === '/mcp/agent-token')
+      return json(200, { success: true, data: { token: 'mcp_tok', token_type: 'Bearer', expires_in: 86400 } })
     const secretRoute = url.pathname.match(/^\/projects\/([^/]+)\/secret$/)
     if (secretRoute && projectSecretRoute) {
       const id = secretRoute[1]
@@ -237,6 +238,13 @@ test('setup with several embeds lists them and exits 3; --project picks one; the
   const kept = run('setup', [], fake, envFile)
   assert.equal(await kept.exited, 0, kept.output.text)
   assert.match(kept.output.text, /projBBB00002 "Second" \(already in/)
+
+  // --new: a second product in the same workspace gets its own embed, even with one already in .env
+  const fresh = run('setup', ['--new', '--name', 'Second Product'], fake, envFile)
+  assert.equal(await fresh.exited, 0, fresh.output.text)
+  assert.equal(fake.seen.created.title, 'Second Product')
+  assert.match(readFileSync(envFile, 'utf8'), /^VIASOCKET_PROJECT_ID=projNEW00001$/m)
+  assert.match(fresh.output.text, /\(created\)/)
 })
 
 test('setup reuses an existing project secret, and falls back to the workspace secret on a backend without the route', async (t) => {

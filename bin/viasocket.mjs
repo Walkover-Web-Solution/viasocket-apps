@@ -5,7 +5,7 @@
  *
  *   curl -fsSL https://flow.viasocket.com/viasocket-login.mjs -o viasocket-login.mjs
  *   node viasocket-login.mjs login [--env .env] [--no-open] [--timeout 300]
- *   node viasocket-login.mjs setup [--env .env] [--project <id>] [--name <title>] [--no-open] [--timeout 300]
+ *   node viasocket-login.mjs setup [--env .env] [--project <id> | --new] [--name <title>] [--no-open] [--timeout 300]
  *   node viasocket-login.mjs mcp [--file viasocket.mcp.json] [--ids viasocket.mcp.ids.json] [--call <tool> --args <json> --token <t>]
  *
  * The same commands ship in the viasocket-apps package: `npx viasocket-apps login` / `setup` / `mcp`.
@@ -67,6 +67,7 @@ function usage(code) {
       '  --call <tool>     mcp: after the sync, call this tool on the URL with --args <json> and, on a login server, --token <t>',
       '  --env <file>      the env file (default .env in the current folder)',
       '  --project <id>    setup: which embed project, when the workspace has several',
+      '  --new             setup: a new embed project for this product, even when the workspace has others',
       '  --name <title>    setup: the name for the embed project it creates when there is none (default: this folder)',
       '  --no-open         print the URL instead of opening a browser (a remote shell, a sandbox)',
       '  --timeout <s>     how long to wait for the browser (default 300)',
@@ -83,6 +84,7 @@ function parseArgs(argv) {
     open: true,
     timeout: 300,
     project: '',
+    newProject: false,
     name: '',
     file: 'viasocket.mcp.json',
     ids: 'viasocket.mcp.ids.json',
@@ -105,6 +107,7 @@ function parseArgs(argv) {
     else if (arg === '--args') options.args = next()
     else if (arg === '--token') options.token = next()
     else if (arg === '--project') options.project = next()
+    else if (arg === '--new') options.newProject = true
     else if (arg === '--name') options.name = next()
     else if (arg === '--no-open') options.open = false
     else if (arg === '--timeout') options.timeout = Number(next())
@@ -420,9 +423,9 @@ async function chooseProject({ token, orgId, options, envFile }) {
     return { project: chosen, how: 'chosen with --project' }
   }
   const saved = getEnv(envFile, PROJECT_ENV)
-  if (saved && byId(saved)) return { project: byId(saved), how: `already in ${options.env}` }
-  if (projects.length === 1) return { project: projects[0], how: "the workspace's only embed" }
-  if (projects.length === 0) {
+  if (!options.newProject && saved && byId(saved)) return { project: byId(saved), how: `already in ${options.env}` }
+  if (!options.newProject && projects.length === 1) return { project: projects[0], how: "the workspace's only embed" }
+  if (options.newProject || projects.length === 0) {
     const title = (options.name || basename(process.cwd()) || 'Integrations').slice(0, 50)
     const created = await api(token, 'POST', `/orgs/${orgId}/projects`, {
       title,
@@ -434,7 +437,9 @@ async function chooseProject({ token, orgId, options, envFile }) {
     if (!id) throw new Error('the project was created but its id was not in the reply')
     return { project: { id, title }, how: 'created' }
   }
-  console.error(`Workspace ${orgId} has ${projects.length} embed projects. Run again with --project <id>, one of:`)
+  console.error(
+    `Workspace ${orgId} has ${projects.length} embed projects. Run again with --project <id>, one of these, or --new for a new one:`
+  )
   for (const project of projects) console.error(`  ${project.id}  ${project.title || ''}`)
   process.exitCode = 3
   return null
