@@ -14,7 +14,8 @@ secret gives your product:
 The OAuth, token refresh, per-app request shapes, polling, retries and AI billing are viaSocket's
 problem, not yours. The same skill also builds **your own automations** in your viaSocket workspace
 and **plugs** (an app's integration) in the Developer Hub; see [For coding agents](#for-coding-agents),
-and `npx viasocket-apps login` to give an agent a way into your workspace.
+`npx viasocket-apps login` to give an agent a way into your workspace, and `npx viasocket-apps mcp` to
+create your product's MCP server from one file.
 
 Zero dependencies. Node 20+, Bun, Deno and edge runtimes.
 
@@ -91,6 +92,23 @@ sign in, pick the workspace, click **Allow**, and the token is written to `.env`
 `--env <file>` picks another file, `--timeout <s>` changes the five-minute wait. Without the package:
 `curl -fsSL https://flow.viasocket.com/viasocket-login.mjs -o viasocket-login.mjs && node viasocket-login.mjs`
 is the same command.
+
+### The product's MCP server from the command line
+
+Describe the server once in `viasocket.mcp.json` (its name and slug, its login as `none`, `api-key` or
+`oauth`, its tools as your own endpoints with a JSON Schema each, its skills and prompts; a secret goes in
+as `"${ENV_NAME}"` and is read from `.env`), then:
+
+```sh
+npx viasocket-apps mcp
+```
+
+It mints `VIASOCKET_MCP_TOKEN` from your agent token (signing you in first if `.env` has none), creates
+or updates the server, its tools, skills and prompts on `mcp.viasocket.com`, removes what the file no
+longer lists, keeps every id in `viasocket.mcp.ids.json` (commit it: it is what makes a rerun update
+instead of duplicate), and tests the URL with `tools/list` and `prompts/list`. `--call <tool> --args
+'<json>'` calls one tool as a client would, with `--token <t>` on a login server. The file's shape and
+every field: [flow.viasocket.com/documentation/skill/mcp.md](https://flow.viasocket.com/documentation/skill/mcp.md).
 
 ## Server
 
