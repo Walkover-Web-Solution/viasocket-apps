@@ -21,6 +21,8 @@
 export { ViaSocket, UserScope, BUILT_IN_PLUG_CATEGORIES } from './client.js'
 export { ViaSocketError } from './errors.js'
 export { signEmbedToken } from './token.js'
+export { agentTools, actionInputSchema } from './agent-tools.js'
+export type { AgentTool, AgentToolsOptions, JsonSchema } from './agent-tools.js'
 export type { SignEmbedTokenInput } from './token.js'
 export type {
   AiAccepted,

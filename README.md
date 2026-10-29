@@ -7,6 +7,7 @@ secret gives your product:
 | -------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | **App integrations** | connect Slack, GitHub, Google Sheets or any of 2,300+ apps; your product runs their actions and reacts to their events | this package: [Server](#server), [Events](#events)     |
 | **AI assistant**     | a chat assistant or AI behind a feature, any model, your own endpoints as its tools                                   | this package: [AI assistant](#ai-assistant)            |
+| **Agent tools**      | your own LangChain agent acting in the apps each user connected, one tool per action                                  | this package: [LangChain](#langchain)                  |
 | **AI memory**        | an AI that remembers each user's rules, facts and corrections; they can see and delete it                             | this package: [AI memory](#ai-memory)                  |
 | **Login and orgs**   | sign-up, login, profile, team members and organisations with roles, no users table                                    | `viasocket.login` and the skill's login-and-orgs page  |
 | **Automations**      | multi-step flows across their apps on an event, a schedule or a webhook, created by your product for each user        | the skill's automations page (plain HTTP)              |
@@ -223,6 +224,55 @@ const socket = await user.ai.rtlayerToken() // for a chat UI: the browser subscr
 
 The whole contract — tools, JSON answers, the websocket path and what arrives on it — is
 [flow.viasocket.com/documentation/ai.md](https://flow.viasocket.com/documentation/ai.md).
+
+## LangChain
+
+Your own agent, on LangChain, acting in the apps each user connected: every action of an app is a
+tool, run on that user's own connection. Slack's Send Message, Google Sheets' Add New Row, HubSpot's
+Create Deal — any of 2,300+ apps, no connector code and no OAuth on your side.
+
+```sh
+npm install viasocket-apps @langchain/core
+```
+
+```js
+import { ViaSocket } from 'viasocket-apps'
+import { viasocketTools } from 'viasocket-apps/langchain'
+import { createAgent } from 'langchain'
+
+const viasocket = new ViaSocket({
+  orgId: process.env.VIASOCKET_ORG_ID,
+  projectId: process.env.VIASOCKET_PROJECT_ID,
+  secret: process.env.VIASOCKET_EMBED_SECRET
+})
+
+const tools = await viasocketTools(viasocket, {
+  user: 'user_123', // the uniqueIdentifier the user connected their apps under
+  apps: ['slack', 'google-sheets'],
+  actions: { slack: ['send-message'], 'google-sheets': ['add-new-row-to-sheet', 'lookup-spreadsheet-rows'] }
+})
+
+const agent = createAgent({ model: 'anthropic:claude-sonnet-5-5', tools })
+await agent.invoke({ messages: [{ role: 'user', content: 'Post our Q3 numbers in #finance' }] })
+```
+
+- **The user connects the app first**, in your product, through the [connect popup](#browser) and
+  `user.enable()`. A tool for an app they have not connected answers the model "Slack is not
+  connected for this user", so the agent can ask them to; it starts working on the next call after
+  they do.
+- **Pick the actions.** An app left out of `actions` gives every published action as a tool — fine for
+  a small app, too many for a large one (Notion has 57). Actions are named by `action_id` or by their
+  path on the app's page (`send-message`).
+- **Tool names** are `<app>_<action>` (`slack_send-message`); the input schema is built from the
+  action's form, so the model sees the same fields, choices and help text a person would.
+- **Fields that hold an id** (a channel, a spreadsheet) are marked as such; the model fills them from
+  what the user said or from another tool, such as a list action of the same app.
+- An error from the app (a wrong channel, a missing permission) comes back to the model as text, not
+  as an exception, so one bad call does not end the run.
+
+Needs `@langchain/core` 0.3 or later. The same tools without LangChain — a name, a description, a JSON
+Schema and `invoke` — are `agentTools(viasocket, options)` from `viasocket-apps`, for any framework
+that takes a JSON Schema.
 
 ## AI memory
 
