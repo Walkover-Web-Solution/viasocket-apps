@@ -6,7 +6,7 @@
 
 import type { ViaSocket } from './client.js'
 import { ViaSocketError } from './errors.js'
-import type { CatalogAction } from './types.js'
+import type { CatalogAction, Flow } from './types.js'
 
 export interface AgentToolsOptions {
   /** The end user the tools act for: the same `uniqueIdentifier` their connections were made under. */
@@ -69,9 +69,12 @@ function staticValues(block: Block): unknown[] | null {
   return values.length ? values : null
 }
 
-function describe(block: Block, picker: boolean): string {
+/** Says where a picker field's values come from: `field` is its full key, as `listOptions` takes it. */
+type PickerHint = (field: string) => string
+
+function describe(block: Block, picker: string | false): string {
   const parts = [block.label, block.help ?? block.customHelp]
-  if (picker) parts.push("An id from the user's account, not a display name.")
+  if (picker) parts.push(picker)
   if (block.dateFormat) parts.push(`Format: ${block.dateFormat}.`)
   // A choice field's placeholder is UI copy ("Select Channel"); only a typed value's is an example.
   const choice = block.type === 'dropdown' || block.type === 'multiselect' || block.type === 'boolean'
@@ -82,7 +85,14 @@ function describe(block: Block, picker: boolean): string {
 }
 
 /** One field of the form as JSON Schema, or null for what is not input (help text). */
-function fieldSchema(block: Block, key: string, steps: Record<string, string[]>, blocks: Record<string, Block>): JsonSchema | null {
+function fieldSchema(
+  block: Block,
+  key: string,
+  steps: Record<string, string[]>,
+  blocks: Record<string, Block>,
+  hint: PickerHint
+): JsonSchema | null {
+  const picker = () => hint(block.key || key)
   switch (block.type) {
     case 'string':
     case 'markdown':
@@ -95,28 +105,32 @@ function fieldSchema(block: Block, key: string, steps: Record<string, string[]>,
       return { type: 'boolean', description: describe(block, false) }
     case 'dropdown': {
       const values = staticValues(block)
-      return values ? { enum: values, description: describe(block, false) } : { type: 'string', description: describe(block, true) }
+      return values ? { enum: values, description: describe(block, false) } : { type: 'string', description: describe(block, picker()) }
     }
     case 'multiselect': {
       const values = staticValues(block)
-      return { type: 'array', items: values ? { enum: values } : { type: 'string' }, description: describe(block, !values) }
+      return {
+        type: 'array',
+        items: values ? { enum: values } : { type: 'string' },
+        description: describe(block, values ? false : picker())
+      }
     }
     case 'dictionary':
       return { type: 'object', additionalProperties: { type: 'string' }, description: describe(block, false) }
     case 'input groups':
-      return { ...objectSchema(key, steps, blocks), description: describe(block, false) }
+      return { ...objectSchema(key, steps, blocks, hint), description: describe(block, false) }
     default:
       return null
   }
 }
 
-function objectSchema(parent: string, steps: Record<string, string[]>, blocks: Record<string, Block>): JsonSchema {
+function objectSchema(parent: string, steps: Record<string, string[]>, blocks: Record<string, Block>, hint: PickerHint): JsonSchema {
   const properties: Record<string, JsonSchema> = {}
   const required: string[] = []
   for (const key of steps[parent] ?? []) {
     const block = blocks[key]
     if (!block) continue
-    const schema = fieldSchema(block, key, steps, blocks)
+    const schema = fieldSchema(block, key, steps, blocks, hint)
     if (!schema) continue
     // `destination.channel_id` is `channel_id` inside `destination`, as inputData nests it.
     const name = key.slice(key.lastIndexOf('.') + 1)
@@ -127,12 +141,19 @@ function objectSchema(parent: string, steps: Record<string, string[]>, blocks: R
   return { type: 'object', properties, ...(required.length ? { required } : {}) }
 }
 
-/** An action's `input_schema` — the form viaSocket renders — as the JSON Schema a model fills. */
-export function actionInputSchema(inputSchema: Record<string, unknown>): JsonSchema {
+const DEFAULT_HINT: PickerHint = () => "An id from the user's account, not a display name."
+
+/**
+ * An action's `input_schema` — the form viaSocket renders — as the JSON Schema a model fills. `hint`
+ * words the description of a field whose values come from the user's account (a channel, a sheet).
+ */
+export function actionInputSchema(inputSchema: Record<string, unknown>, hint: PickerHint = DEFAULT_HINT): JsonSchema {
   const steps = (inputSchema?.steps ?? {}) as Record<string, string[]>
   const blocks = (inputSchema?.blocks ?? {}) as Record<string, Block>
-  return objectSchema('root', steps, blocks)
+  return objectSchema('root', steps, blocks, hint)
 }
+
+const clip = (text: string) => (text.length > MAX_RESULT ? `${text.slice(0, MAX_RESULT)}… (truncated)` : text)
 
 /**
  * One tool per chosen action of each app. Reads the public catalog only; the user's connection is
@@ -167,27 +188,87 @@ export async function agentTools(viasocket: ViaSocket, options: AgentToolsOption
           return match
         })
       : app.actions
+    const appName = app.service.name
+    const notConnected = `${appName} is not connected for this user. Ask them to connect it, then try again.`
 
-    // Only a found script_id is kept: an app the user connects mid-conversation works on the next call.
-    let scriptId: string | null = null
-    const findScript = async () => (scriptId ??= await user.findEnabled(serviceId))
+    // The user's enabled flow for this app: its script_id runs actions, its auth_id reads their account.
+    // Only a found one is kept, so an app the user connects mid-conversation works on the next call.
+    let flow: Flow | null = null
+    const findFlow = async () =>
+      (flow ??=
+        (await user.listFlows()).find(
+          (entry) => entry.serviceId === serviceId && (entry.status === 'active' || entry.status === 'paused')
+        ) ?? null)
 
-    return chosen.map((action: CatalogAction) => ({
-      name: uniqueName(slug, action.name),
-      description: `${app.service.name}: ${action.description || action.name}`,
-      parameters: actionInputSchema(action.input_schema),
+    const optionsTool = uniqueName(slug, 'list options')
+    const withPickers = new Map<string, CatalogAction>()
+    const tools: AgentTool[] = chosen.map((action: CatalogAction) => {
+      const name = uniqueName(slug, action.name)
+      const parameters = actionInputSchema(action.input_schema, (field) => {
+        withPickers.set(name, action)
+        return `An id from the user's ${appName} account, never a display name or a guess: get it with ${optionsTool} (tool "${name}", field "${field}").`
+      })
+      return {
+        name,
+        description: `${appName}: ${action.description || action.name}`,
+        parameters,
+        invoke: async (input: Record<string, unknown>) => {
+          try {
+            const found = await findFlow()
+            if (!found) return notConnected
+            const result = await viasocket.runAction(found.id, action.action_version_id, input ?? {})
+            return clip(typeof result === 'string' ? result : JSON.stringify(result ?? null))
+          } catch (error) {
+            if (error instanceof ViaSocketError) return `${appName} ${action.name} failed: ${error.message}`
+            throw error
+          }
+        }
+      }
+    })
+    if (!withPickers.size) {
+      taken.delete(optionsTool)
+      return tools
+    }
+
+    tools.push({
+      name: optionsTool,
+      description: `${appName}: lists the values a field of another ${appName} tool accepts (a channel, a sheet, a list), read from the user's own ${appName} account. Call it before filling a field whose description names this tool; send the value, show the label.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          tool: { enum: [...withPickers.keys()], description: 'The tool whose field needs values.' },
+          field: { type: 'string', description: 'The field, exactly as its description names it, such as "destination.channel_id".' },
+          chosen: {
+            type: 'object',
+            description:
+              'What is already chosen for that tool, in the same shape as its input. A field that depends on another (a sheet inside a spreadsheet) lists nothing until that one is here.'
+          },
+          search: { type: 'string', description: 'Words to narrow a long list, such as part of a channel name.' }
+        },
+        required: ['tool', 'field']
+      },
       invoke: async (input: Record<string, unknown>) => {
+        const action = withPickers.get(String(input?.tool ?? ''))
+        if (!action) return `Unknown tool "${input?.tool}": use one of ${[...withPickers.keys()].join(', ')}.`
         try {
-          const script = await findScript()
-          if (!script) return `${app.service.name} is not connected for this user. Ask them to connect it, then try again.`
-          const result = await viasocket.runAction(script, action.action_version_id, input ?? {})
-          const text = typeof result === 'string' ? result : JSON.stringify(result ?? null)
-          return text.length > MAX_RESULT ? `${text.slice(0, MAX_RESULT)}… (truncated)` : text
+          const found = await findFlow()
+          if (!found) return notConnected
+          const chosenSoFar = input?.chosen && typeof input.chosen === 'object' ? (input.chosen as Record<string, unknown>) : {}
+          const existingFields = input?.search ? { ...chosenSoFar, _searchText: String(input.search) } : chosenSoFar
+          const { options: values, offset } = await user.listOptions(action.action_version_id, {
+            fieldKey: String(input?.field ?? ''),
+            authId: found.authId,
+            existingFields
+          })
+          if (!values.length)
+            return 'No values. If this field depends on another, put that one in "chosen" first, or try other search words.'
+          return clip(JSON.stringify({ options: values.map(({ label, value }) => ({ label, value })), more: Boolean(offset) }))
         } catch (error) {
-          if (error instanceof ViaSocketError) return `${app.service.name} ${action.name} failed: ${error.message}`
+          if (error instanceof ViaSocketError) return `${appName}: listing values failed: ${error.message}`
           throw error
         }
       }
-    }))
+    })
+    return tools
   })
 }

@@ -265,8 +265,9 @@ await agent.invoke({ messages: [{ role: 'user', content: 'Post our Q3 numbers in
   path on the app's page (`send-message`).
 - **Tool names** are `<app>_<action>` (`slack_send-message`); the input schema is built from the
   action's form, so the model sees the same fields, choices and help text a person would.
-- **Fields that hold an id** (a channel, a spreadsheet) are marked as such; the model fills them from
-  what the user said or from another tool, such as a list action of the same app.
+- **Fields that hold an id** (a channel, a spreadsheet) come from the user's own account. Each app with such
+  a field also gets a `<app>_list-options` tool, and the field's description names it with the exact field
+  key, so the model lists the real values (on the user's connection) instead of guessing an id.
 - An error from the app (a wrong channel, a missing permission) comes back to the model as text, not
   as an exception, so one bad call does not end the run.
 
