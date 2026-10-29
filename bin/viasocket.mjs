@@ -33,8 +33,8 @@
 import { createServer } from 'node:http'
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
-import { spawn } from 'node:child_process'
+import { basename, dirname, resolve } from 'node:path'
+import { spawn, spawnSync } from 'node:child_process'
 
 const TOKEN_ENV = 'VIASOCKET_AGENT_TOKEN'
 const ORG_ENV = 'VIASOCKET_ORG_ID'
@@ -167,6 +167,14 @@ function setEnv(file, key, value) {
   if (index >= 0) lines[index] = `${key}=${value}`
   else lines.push(`${key}=${value}`)
   writeFileSync(file, `${lines.join(eol)}${eol}`)
+}
+
+/** Says so when the env file sits in a git repository and is not ignored: it holds secrets and would be committed. */
+function warnIfNotIgnored(file) {
+  const result = spawnSync('git', ['check-ignore', '-q', file], { cwd: dirname(file), stdio: 'ignore' })
+  // 0 ignored, 1 not ignored, 128 not a repository (or no git): only 1 is a problem
+  if (result.status === 1)
+    console.error(`Warning: ${file} is not git-ignored. Add it to .gitignore before the next commit: it holds secrets.`)
 }
 
 // ---- the sign-in ----------------------------------------------------------------------------------
@@ -749,6 +757,7 @@ async function mcpCommand(options, envFile) {
   const { ids, changes } = await syncMcpServer({ token, definition, idsFile, options })
   console.log(`${changes.join('; ')}.`)
   console.log(`Ids kept in ${idsFile} (commit it; it holds no secret).`)
+  warnIfNotIgnored(envFile)
 
   const loginOn = definition.login.mode !== 'none' && definition.login.when !== 'needed'
   const clientToken = options.token
@@ -821,6 +830,7 @@ async function main() {
     const who = org ? ` for workspace ${org.name || org.id}${org.name && org.id ? ` (${org.id})` : ''}` : ''
     console.log(`Saved ${TOKEN_ENV}${org?.id ? ` and ${ORG_ENV}=${org.id}` : ''} to ${envFile}${who}.`)
     console.log(`Never commit that file. Revoke the token any time at ${DASHBOARD}.`)
+    warnIfNotIgnored(envFile)
     process.exitCode = 0
     return
   }
@@ -846,6 +856,7 @@ async function main() {
   setEnv(envFile, SECRET_ENV, secret)
   console.log(`Workspace ${orgId}; embed project ${project.id}${project.title ? ` "${project.title}"` : ''} (${how}); ${scope} secret.`)
   console.log(`Saved ${TOKEN_ENV}, ${ORG_ENV}, ${PROJECT_ENV} and ${SECRET_ENV} to ${envFile}. Never commit that file.`)
+  warnIfNotIgnored(envFile)
   process.exitCode = 0
   return
 }
