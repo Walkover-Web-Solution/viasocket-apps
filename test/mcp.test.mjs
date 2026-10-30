@@ -2,13 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { ViaSocket } from '../dist/esm/index.js'
 
-// user.mcp against a fake of our API's /embed/mcp/api/*, which forwards to the MCP host's management API on an account
-// of the user's own: every call carries the user's embed token, and none goes to the MCP host directly.
-const API = 'https://flow-api.viasocket.com/embed/mcp/api'
-const MCP = 'https://mcp.viasocket.com'
+// user.mcp against a fake of the two services it calls: flow-api's GET /embed/mcp/token (with the user's embed token)
+// and mcp.viasocket.com's management API (with that token as a Bearer).
+const MCP = 'https://mcp.test/api'
 
 function fakeServices({ failOn } = {}) {
-  const state = { servers: {}, tools: {}, skills: {}, prompts: {}, next: 1 }
+  const state = { servers: {}, tools: {}, skills: {}, prompts: {}, next: 1, tokens: 0, expireNext: false }
   const calls = []
   const id = () => `id${String(state.next++).padStart(4, '0')}`
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -18,21 +17,29 @@ function fakeServices({ failOn } = {}) {
     const body = init.body ? JSON.parse(init.body) : undefined
     const auth = new Headers(init.headers).get('authorization') || ''
     calls.push({ method, url: url.href, auth, body })
-    if (!url.href.startsWith(API)) return json(404, { success: false, message: 'no route' })
-    assert.ok(auth && !auth.startsWith('Bearer'), 'the call carries the bare embed token')
-    const path = url.pathname.replace(/^\/embed\/mcp\/api/, '')
+    if (url.pathname === '/embed/mcp/token') {
+      assert.ok(auth && !auth.startsWith('Bearer'), 'the token route takes the bare embed token')
+      state.tokens++
+      return json(200, { success: true, data: { token: `mcp_${state.tokens}`, token_type: 'Bearer', expires_in: 3600, api: MCP } })
+    }
+    if (!url.href.startsWith(MCP)) return json(404, { success: false, message: 'no route' })
+    if (auth !== `Bearer mcp_${state.tokens}` || state.expireNext) {
+      state.expireNext = false
+      return json(401, { success: false, message: 'Unauthorized' })
+    }
+    const path = url.pathname.replace(/^\/api/, '')
     if (failOn && failOn(method, path)) return json(500, { success: false, message: 'boom' })
     let m
     // like the real list, each server comes with its URL
     if (path === '/mcp' && method === 'GET')
       return json(201, {
         success: true,
-        data: Object.values(state.servers).map((server) => ({ ...server, url: `${MCP}/mcp/${server._id}-embed_projA_2` }))
+        data: Object.values(state.servers).map((server) => ({ ...server, url: `https://mcp.test/mcp/${server._id}-8645` }))
       })
     if (path === '/mcp' && method === 'POST') {
       const server = { _id: id(), ...body, skillIds: [], promptIds: [] }
       state.servers[server._id] = server
-      return json(201, { success: true, data: { ...server, url: `${MCP}/mcp/${server._id}-embed_projA_2` } })
+      return json(201, { success: true, data: { ...server, url: `https://mcp.test/mcp/${server._id}-8645` } })
     }
     if ((m = path.match(/^\/mcp\/([^/]+)$/))) {
       if (!state.servers[m[1]]) return json(404, { success: false, message: 'MCP server not found' })
@@ -88,7 +95,7 @@ function fakeServices({ failOn } = {}) {
   return { fetchImpl, state, calls }
 }
 
-const viasocketWith = (fetchImpl) => new ViaSocket({ orgId: '8645', projectId: 'projA', secret: 's', fetch: fetchImpl })
+const viasocketWith = (fetchImpl) => new ViaSocket({ orgId: '8645', projectId: 'projA', secret: 's', fetch: fetchImpl, mcpApiBaseUrl: MCP })
 
 const AGENT = {
   name: 'Order desk',
@@ -113,11 +120,11 @@ const AGENT = {
   ]
 }
 
-test('user.mcp.sync creates a server with its tools, skill and prompt, through our API as this user', async () => {
+test('user.mcp.sync creates a server with its tools, skill and prompt, as this user, with one token', async () => {
   const { fetchImpl, state, calls } = fakeServices()
   const user = viasocketWith(fetchImpl).user('alice')
   const { ids, url, changes } = await user.mcp.sync(AGENT)
-  assert.equal(url, `${MCP}/mcp/${ids.server}-embed_projA_2`)
+  assert.equal(url, `https://mcp.test/mcp/${ids.server}-8645`)
   assert.deepEqual(Object.keys(ids.tools), ['get_order', 'refund_order'])
   assert.ok(ids.skills.handle_refund && ids.prompts.refund)
   assert.deepEqual(changes, [
@@ -136,7 +143,8 @@ test('user.mcp.sync creates a server with its tools, skill and prompt, through o
     method: 'GET',
     tokenPrefix: 'Bearer'
   })
-  assert.ok(calls.length > 0 && calls.every((call) => call.url.startsWith(API)), 'a call went somewhere other than our API')
+  assert.equal(state.tokens, 1, 'the token was fetched more than once')
+  assert.ok(calls.filter((call) => call.url.startsWith(MCP)).every((call) => call.auth === 'Bearer mcp_1'))
 })
 
 test('user.mcp.sync with the saved ids updates in place and removes what the definition dropped', async () => {
@@ -173,6 +181,15 @@ test('user.mcp.sync refuses a bad definition by key, a slug included, before any
   assert.equal(calls.length, 0)
 })
 
+test('user.mcp takes a new token once when the management API refuses the old one', async () => {
+  const { fetchImpl, state } = fakeServices()
+  const user = viasocketWith(fetchImpl).user('alice')
+  await user.mcp.list()
+  state.expireNext = true
+  assert.deepEqual(await user.mcp.list(), [])
+  assert.equal(state.tokens, 2)
+})
+
 test('a failed user.mcp.sync hands back what it made, so a retry updates it', async () => {
   const { fetchImpl, state } = fakeServices({ failOn: (method, path) => method === 'POST' && path === '/skill' })
   const user = viasocketWith(fetchImpl).user('alice')
@@ -186,7 +203,7 @@ test('user.mcp.list gives each server its URL; remove deletes it with its skills
   const { fetchImpl, state } = fakeServices()
   const user = viasocketWith(fetchImpl).user('alice')
   const { ids } = await user.mcp.sync(AGENT)
-  assert.deepEqual(await user.mcp.list(), [{ id: ids.server, name: 'Order desk', url: `${MCP}/mcp/${ids.server}-embed_projA_2` }])
+  assert.deepEqual(await user.mcp.list(), [{ id: ids.server, name: 'Order desk', url: `https://mcp.test/mcp/${ids.server}-8645` }])
   await user.mcp.remove(ids)
   assert.equal(Object.keys(state.servers).length, 0)
   assert.equal(Object.keys(state.tools).length, 0)

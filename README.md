@@ -330,7 +330,8 @@ const { ids, url, changes } = await user.mcp.sync(
 - **`user.mcp.list()`** gives the user's servers with their URLs; **`user.mcp.remove(ids)`** deletes one with its tools,
   skills and prompts; **`user.mcp.call(method, path, body)`** is any other call of the
   [management API](https://mcp.viasocket.com/api-reference.md), as that user.
-- Up to 25 servers per user. A slug, a custom domain and copying a server stay yours.
+- Each user's servers are on an account of their own, apart from yours and every other user's. A slug and a custom
+  domain are for your product's own server.
 
 ## AI memory
 

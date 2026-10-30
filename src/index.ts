@@ -31,6 +31,7 @@ export type {
   McpServerSummary,
   McpSkill,
   McpSyncResult,
+  McpToken,
   McpTool,
   McpToolApi
 } from './mcp.js'

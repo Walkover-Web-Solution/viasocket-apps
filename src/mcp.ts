@@ -1,9 +1,9 @@
 /**
  * MCP servers one user of your product makes: for an agent or an AI product they build in it, each with its own MCP URL.
  *
- * The calls are those of the MCP management API (https://mcp.viasocket.com/api-reference.md), made through our API
- * with the user's embed token (signed by your embed secret): it keeps an account on the MCP host for each user, so
- * every server, skill and prompt is that user's, and they see nothing else, neither another user's nor your own. `sync` takes the same definition
+ * The calls go to the MCP management API (https://mcp.viasocket.com/api-reference.md) with a token for that user only
+ * (GET /embed/mcp/token, signed by your embed secret through their embed token): every server, skill and prompt it
+ * makes is that user's, and it sees nothing else, neither another user's nor your own. `sync` takes the same definition
  * as the `viasocket.mcp.json` of `npx viasocket-apps mcp`, without the slug (a URL alias is yours, not a user's).
  */
 
@@ -101,6 +101,13 @@ export interface McpServerSummary {
   id: string
   name: string
   url: string
+}
+
+export interface McpToken {
+  token: string
+  expiresIn: number
+  /** The management API's base URL. */
+  api: string
 }
 
 /** One call to the management API as this user; the envelope's data. */

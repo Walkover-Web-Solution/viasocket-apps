@@ -11,7 +11,7 @@
 import { ViaSocketError } from './errors.js'
 import { request } from './http.js'
 import { removeMcpServer, syncMcpServer } from './mcp.js'
-import type { McpApi, McpServerDefinition, McpServerIds, McpServerSummary, McpSyncResult } from './mcp.js'
+import type { McpApi, McpServerDefinition, McpServerIds, McpServerSummary, McpSyncResult, McpToken } from './mcp.js'
 import { signEmbedToken } from './token.js'
 import { jwtOf, loginRequest, toLoginUser } from './login.js'
 import type {
@@ -53,8 +53,7 @@ const AI_MAX_TOOLS = 20
 /** The API refuses more MCP servers than this in one send. */
 const AI_MAX_MCP_SERVERS = 10
 const DEFAULT_RUN_BASE_URL = 'https://flow.sokt.io'
-/** Where users' MCP servers are served; their URLs come back from the API, this is only a fallback. */
-const MCP_HOST = 'https://mcp.viasocket.com'
+const DEFAULT_MCP_API_BASE_URL = 'https://mcp.viasocket.com/api'
 
 /** The public catalog: no token, the same data in every environment. */
 const CATALOG = {
@@ -94,6 +93,8 @@ export class ViaSocket {
   readonly projectId: string
   readonly apiBaseUrl: string
   readonly runBaseUrl: string
+  /** The MCP management API, for `user.mcp`. */
+  readonly mcpApiBaseUrl: string
   private readonly secret: string
   /** @internal */
   readonly transport: typeof fetch
@@ -108,6 +109,7 @@ export class ViaSocket {
     this.secret = required('secret', options?.secret)
     this.apiBaseUrl = trimSlash(options.apiBaseUrl || DEFAULT_API_BASE_URL)
     this.runBaseUrl = trimSlash(options.runBaseUrl || DEFAULT_RUN_BASE_URL)
+    this.mcpApiBaseUrl = trimSlash(options.mcpApiBaseUrl || DEFAULT_MCP_API_BASE_URL)
 
     const transport = options.fetch ?? globalThis.fetch
     if (typeof transport !== 'function') {
@@ -413,6 +415,8 @@ export class UserScope {
   private tokenPromise: Promise<string> | undefined
   /** The memory token `memory.call` reuses, until a minute before it runs out. */
   private memoryCache: { token: Promise<MemoryToken>; expiresAt: number } | undefined
+  /** The MCP management token `mcp.*` reuses, until a minute before it runs out. */
+  private mcpCache: { token: Promise<McpToken>; expiresAt: number } | undefined
 
   constructor(
     private readonly client: ViaSocket,
@@ -777,26 +781,68 @@ export class UserScope {
      * time. If it throws, `error.ids` holds what was made so far: save those too.
      */
     sync: (definition: McpServerDefinition, saved?: Partial<McpServerIds> | null): Promise<McpSyncResult> =>
-      syncMcpServer(this.mcpApi, MCP_HOST, definition, saved),
+      syncMcpServer(this.mcpApi, this.mcpHost(), definition, saved),
 
     /** This user's servers, with their MCP URLs. */
     list: async (): Promise<McpServerSummary[]> => {
       const servers = await this.mcpApi<Array<{ _id: string; name?: string; url?: string }>>('GET', '/mcp')
-      return (servers ?? []).map((server) => ({ id: String(server._id), name: server.name ?? '', url: server.url ?? '' }))
+      return (servers ?? []).map((server) => ({
+        id: String(server._id),
+        name: server.name ?? '',
+        url: server.url ?? '' // the host answers each server's URL; a user's servers are on their own account, not your org
+      }))
     },
 
     /** Deletes a server `sync` made, with its tools, skills and prompts. */
     remove: (ids: Partial<McpServerIds>): Promise<void> => removeMcpServer(this.mcpApi, ids),
 
     /** Any other call of https://mcp.viasocket.com/api-reference.md, as this user: `mcp.call('GET', '/tools/<serverId>')`. */
-    call: <T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> => this.mcpApi<T>(method, path, body)
+    call: <T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> => this.mcpApi<T>(method, path, body),
+
+    /** A fresh management token for this user, one hour. `sync`, `list`, `remove` and `call` keep their own. */
+    token: async (): Promise<McpToken> => {
+      const { data } = await this.call<{ token: string; expires_in: number; api: string }>('GET', '/embed/mcp/token')
+      return { token: data.token, expiresIn: data.expires_in, api: trimSlash(data.api || this.client.mcpApiBaseUrl) }
+    }
   }
 
-  /** One management call of the MCP host, as this user: through our API, which keeps an account there for each user. */
+  private mcpHost(): string {
+    return this.client.mcpApiBaseUrl.replace(/\/api$/, '')
+  }
+
   private readonly mcpApi: McpApi = async <T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> => {
     if (!required('path', path).startsWith('/')) throw new ViaSocketError('mcp.call: path starts with /', { status: null })
-    const { data } = await this.call<T>(method, `/embed/mcp/api${path}`, body)
-    return data
+    for (let attempt = 0; ; attempt++) {
+      const { token } = await this.mcpToken()
+      try {
+        const { data } = await request<T>({
+          method,
+          url: `${this.client.mcpApiBaseUrl}${path}`,
+          token: `Bearer ${token}`,
+          body: body === undefined ? undefined : JSON.stringify(body),
+          fetchImpl: this.client.transport
+        })
+        return data
+      } catch (error) {
+        if (attempt || (error as ViaSocketError)?.status !== 401) throw error
+        this.mcpCache = undefined
+      }
+    }
+  }
+
+  private async mcpToken(): Promise<McpToken> {
+    const cached = this.mcpCache
+    if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token
+    const entry = { token: this.mcp.token(), expiresAt: Infinity }
+    this.mcpCache = entry
+    try {
+      const value = await entry.token
+      entry.expiresAt = Date.now() + value.expiresIn * 1000
+      return value
+    } catch (error) {
+      if (this.mcpCache === entry) this.mcpCache = undefined
+      throw error
+    }
   }
 
   private async memoryToken(): Promise<MemoryToken> {
