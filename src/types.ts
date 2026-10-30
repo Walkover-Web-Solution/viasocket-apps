@@ -18,8 +18,6 @@ export interface ViaSocketOptions {
   apiBaseUrl?: string
   /** Where actions run. Defaults to https://flow.sokt.io. */
   runBaseUrl?: string
-  /** The MCP management API, for `user.mcp`. Defaults to https://mcp.viasocket.com/api. */
-  mcpApiBaseUrl?: string
   /** Swap the transport — for tests, retries, or a runtime without a global fetch. */
   fetch?: typeof fetch
 }
