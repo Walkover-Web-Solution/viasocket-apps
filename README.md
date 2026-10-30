@@ -8,6 +8,7 @@ secret gives your product:
 | **App integrations** | connect Slack, GitHub, Google Sheets or any of 2,300+ apps; your product runs their actions and reacts to their events | this package: [Server](#server), [Events](#events)     |
 | **AI assistant**     | a chat assistant or AI behind a feature, any model, your own endpoints and any MCP server as its tools                | this package: [AI assistant](#ai-assistant)            |
 | **Agent tools**      | your own AI agent (LangChain, OpenAI Agents SDK, Vercel AI SDK, …) acting in the apps each user connected              | this package: [Agent tools](#agent-tools)              |
+| **MCP servers**      | each user makes MCP URLs for the agents or AI products they build in your product, with your tools behind them        | this package: [MCP servers your users make](#mcp-servers-your-users-make) |
 | **AI memory**        | an AI that remembers each user's rules, facts and corrections; they can see and delete it                             | this package: [AI memory](#ai-memory)                  |
 | **Login and orgs**   | sign-up, login, profile, team members and organisations with roles, no users table                                    | `viasocket.login` and the skill's login-and-orgs page  |
 | **Automations**      | multi-step flows across their apps on an event, a schedule or a webhook, created by your product for each user        | the skill's automations page (plain HTTP)              |
@@ -293,6 +294,43 @@ const tools = (await agentTools(viasocket, { user: 'user_123', apps: ['slack'] }
 
 The same list, `<app>_list-options` included, works with the Vercel AI SDK (`jsonSchema(t.parameters)`),
 Mastra, the Claude Agent SDK or a plain tool-calling loop.
+
+## MCP servers your users make
+
+When your users build agents or AI products inside your product, each can have MCP servers of its own: an MCP URL
+they add to Claude, ChatGPT, Cursor or another agent, with the tools they chose behind it. `user.mcp` makes them from
+your server, signed by your embed secret; every server, skill and prompt is that user's alone, and they see no other
+user's, nor yours. (Your product's own single server is the command-line `mcp` above.)
+
+```js
+const user = viasocket.user(String(userId))
+const { ids, url, changes } = await user.mcp.sync(
+  {
+    name: 'Order desk',
+    instructions: 'Looks up and refunds orders. Start with get_order.',
+    login: { mode: 'api-key', validationUrl: 'https://api.example.com/me' },
+    tools: [
+      {
+        name: 'get_order',
+        description: 'Gets one order by its id.',
+        api: { url: 'https://api.example.com/orders/{{id}}', method: 'GET', tokenPrefix: 'Bearer' },
+        inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'The order id' } }, required: ['id'] }
+      }
+    ]
+  },
+  savedIds // what the last sync returned for this server, or nothing the first time
+)
+// save `ids` with the user's agent; show them `url`
+```
+
+- **The definition** is the shape of `viasocket.mcp.json` without `slug`: name, instructions, branding, login (`none`,
+  `api-key` or `oauth`), tools, skills and prompts.
+- **`ids`** are what make the next `sync` update instead of duplicate: keep them per server in your database. If
+  `sync` throws, `error.ids` holds what it made so far; save those too.
+- **`user.mcp.list()`** gives the user's servers with their URLs; **`user.mcp.remove(ids)`** deletes one with its tools,
+  skills and prompts; **`user.mcp.call(method, path, body)`** is any other call of the
+  [management API](https://mcp.viasocket.com/api-reference.md), as that user.
+- Up to 25 servers per user. A slug, a custom domain and copying a server stay yours.
 
 ## AI memory
 
