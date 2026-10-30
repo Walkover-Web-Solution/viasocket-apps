@@ -6,8 +6,8 @@ secret gives your product:
 | what                 | your users get                                                                                                        | where                                                  |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | **App integrations** | connect Slack, GitHub, Google Sheets or any of 2,300+ apps; your product runs their actions and reacts to their events | this package: [Server](#server), [Events](#events)     |
-| **AI assistant**     | a chat assistant or AI behind a feature, any model, your own endpoints as its tools                                   | this package: [AI assistant](#ai-assistant)            |
-| **Agent tools**      | your own LangChain agent acting in the apps each user connected, one tool per action                                  | this package: [LangChain](#langchain)                  |
+| **AI assistant**     | a chat assistant or AI behind a feature, any model, your own endpoints and any MCP server as its tools                | this package: [AI assistant](#ai-assistant)            |
+| **Agent tools**      | your own AI agent (LangChain, OpenAI Agents SDK, Vercel AI SDK, …) acting in the apps each user connected              | this package: [Agent tools](#agent-tools)              |
 | **AI memory**        | an AI that remembers each user's rules, facts and corrections; they can see and delete it                             | this package: [AI memory](#ai-memory)                  |
 | **Login and orgs**   | sign-up, login, profile, team members and organisations with roles, no users table                                    | `viasocket.login` and the skill's login-and-orgs page  |
 | **Automations**      | multi-step flows across their apps on an event, a schedule or a webhook, created by your product for each user        | the skill's automations page (plain HTTP)              |
@@ -225,11 +225,14 @@ const socket = await user.ai.rtlayerToken() // for a chat UI: the browser subscr
 The whole contract — tools, JSON answers, the websocket path and what arrives on it — is
 [flow.viasocket.com/documentation/ai.md](https://flow.viasocket.com/documentation/ai.md).
 
-## LangChain
+## Agent tools
 
-Your own agent, on LangChain, acting in the apps each user connected: every action of an app is a
-tool, run on that user's own connection. Slack's Send Message, Google Sheets' Add New Row, HubSpot's
-Create Deal — any of 2,300+ apps, no connector code and no OAuth on your side.
+Your own AI agent acting in the apps each user connected: every action of an app is a tool, run on
+that user's own connection. Slack's Send Message, Google Sheets' Add New Row, HubSpot's Create Deal —
+any of 2,300+ apps, no connector code and no OAuth on your side. The tools are plain JSON Schema, so
+any agent framework takes them; LangChain has a ready wrapper.
+
+### LangChain
 
 ```sh
 npm install viasocket-apps @langchain/core
@@ -271,9 +274,25 @@ await agent.invoke({ messages: [{ role: 'user', content: 'Post our Q3 numbers in
 - An error from the app (a wrong channel, a missing permission) comes back to the model as text, not
   as an exception, so one bad call does not end the run.
 
-Needs `@langchain/core` 0.3 or later. The same tools without LangChain — a name, a description, a JSON
-Schema and `invoke` — are `agentTools(viasocket, options)` from `viasocket-apps`, for any framework
-that takes a JSON Schema.
+Needs `@langchain/core` 0.3 or later.
+
+### Any other framework
+
+`agentTools(viasocket, options)` takes the same options and gives each tool as `{ name, description,
+parameters, invoke }`: `parameters` is a JSON Schema and `invoke(input)` answers a string for the
+model. Wrap them the way your framework takes a tool, for example the OpenAI Agents SDK:
+
+```js
+import { tool } from '@openai/agents'
+import { agentTools } from 'viasocket-apps'
+
+const tools = (await agentTools(viasocket, { user: 'user_123', apps: ['slack'] })).map((t) =>
+  tool({ name: t.name, description: t.description, parameters: t.parameters, strict: false, execute: (input) => t.invoke(input) })
+)
+```
+
+The same list, `<app>_list-options` included, works with the Vercel AI SDK (`jsonSchema(t.parameters)`),
+Mastra, the Claude Agent SDK or a plain tool-calling loop.
 
 ## AI memory
 
