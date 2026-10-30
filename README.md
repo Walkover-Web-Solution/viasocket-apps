@@ -7,7 +7,7 @@ secret gives your product:
 | -------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | **App integrations** | connect Slack, GitHub, Google Sheets or any of 2,300+ apps; your product runs their actions and reacts to their events | this package: [Server](#server), [Events](#events)     |
 | **AI assistant**     | a chat assistant or AI behind a feature, any model, your own endpoints as its tools                                   | this package: [AI assistant](#ai-assistant)            |
-| **Agent tools**      | your own LangChain agent acting in the apps each user connected, one tool per action                                  | this package: [LangChain](#langchain)                  |
+| **Agent tools**      | your own LangChain or AI SDK agent acting in the apps each user connected, one tool per action                        | [LangChain](#langchain), [Vercel AI SDK](#vercel-ai-sdk) |
 | **AI memory**        | an AI that remembers each user's rules, facts and corrections; they can see and delete it                             | this package: [AI memory](#ai-memory)                  |
 | **Login and orgs**   | sign-up, login, profile, team members and organisations with roles, no users table                                    | `viasocket.login` and the skill's login-and-orgs page  |
 | **Automations**      | multi-step flows across their apps on an event, a schedule or a webhook, created by your product for each user        | the skill's automations page (plain HTTP)              |
@@ -274,6 +274,44 @@ await agent.invoke({ messages: [{ role: 'user', content: 'Post our Q3 numbers in
 Needs `@langchain/core` 0.3 or later. The same tools without LangChain — a name, a description, a JSON
 Schema and `invoke` — are `agentTools(viasocket, options)` from `viasocket-apps`, for any framework
 that takes a JSON Schema.
+
+## Vercel AI SDK
+
+The same tools for the [AI SDK](https://ai-sdk.dev): every action of an app the user connected,
+keyed by name as `generateText` and `streamText` take them.
+
+```sh
+npm install viasocket-apps ai
+```
+
+```js
+import { ViaSocket } from 'viasocket-apps'
+import { viasocketTools } from 'viasocket-apps/ai-sdk'
+import { generateText, stepCountIs } from 'ai'
+
+const viasocket = new ViaSocket({
+  orgId: process.env.VIASOCKET_ORG_ID,
+  projectId: process.env.VIASOCKET_PROJECT_ID,
+  secret: process.env.VIASOCKET_EMBED_SECRET
+})
+
+const tools = await viasocketTools(viasocket, {
+  user: 'user_123',
+  apps: ['slack', 'google-sheets'],
+  actions: { slack: ['send-message'], 'google-sheets': ['add-new-row-to-sheet', 'lookup-spreadsheet-rows'] }
+})
+
+const { text } = await generateText({
+  model: 'anthropic/claude-sonnet-5-5',
+  tools,
+  stopWhen: stepCountIs(5),
+  prompt: 'Post our Q3 numbers in #finance'
+})
+```
+
+Everything under [LangChain](#langchain) holds here too: the user connects the app first, pick the
+actions, `<app>_list-options` fills id fields, and an app's error comes back to the model as text.
+Needs `ai` 5 or later.
 
 ## AI memory
 

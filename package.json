@@ -16,7 +16,8 @@
     "github",
     "google-sheets",
     "agent-skill",
-    "langchain"
+    "langchain",
+    "vercel-ai-sdk"
   ],
   "license": "MIT",
   "author": "Walkover Web Solution",
@@ -49,6 +50,11 @@
       "types": "./dist/esm/langchain.d.ts",
       "import": "./dist/esm/langchain.js",
       "require": "./dist/cjs/langchain.js"
+    },
+    "./ai-sdk": {
+      "types": "./dist/esm/ai-sdk.d.ts",
+      "import": "./dist/esm/ai-sdk.js",
+      "require": "./dist/cjs/ai-sdk.js"
     }
   },
   "bin": {
@@ -62,18 +68,23 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/finish-build.mjs",
-    "test": "npm run build && node --test test/token.test.mjs test/client.test.mjs test/browser.test.mjs test/cli.test.mjs test/langchain.test.mjs",
+    "test": "npm run build && node --test test/token.test.mjs test/client.test.mjs test/browser.test.mjs test/cli.test.mjs test/langchain.test.mjs test/ai-sdk.test.mjs",
     "prepublishOnly": "npm test"
   },
   "devDependencies": {
     "@langchain/core": "^1.3.1",
+    "ai": "^5.0.282",
     "typescript": "^5.6.0"
   },
   "peerDependencies": {
-    "@langchain/core": ">=0.3.0"
+    "@langchain/core": ">=0.3.0",
+    "ai": ">=5.0.0"
   },
   "peerDependenciesMeta": {
     "@langchain/core": {
+      "optional": true
+    },
+    "ai": {
       "optional": true
     }
   }
