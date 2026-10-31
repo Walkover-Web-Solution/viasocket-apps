@@ -231,7 +231,7 @@ The whole contract — tools, JSON answers, the websocket path and what arrives 
 Your own AI agent acting in the apps each user connected: every action of an app is a tool, run on
 that user's own connection. Slack's Send Message, Google Sheets' Add New Row, HubSpot's Create Deal —
 any of 2,300+ apps, no connector code and no OAuth on your side. The tools are plain JSON Schema, so
-any agent framework takes them; LangChain has a ready wrapper.
+any agent framework takes them; LangChain and the Vercel AI SDK have ready wrappers.
 
 ### LangChain
 
@@ -277,6 +277,45 @@ await agent.invoke({ messages: [{ role: 'user', content: 'Post our Q3 numbers in
 
 Needs `@langchain/core` 0.3 or later.
 
+### Vercel AI SDK
+
+The same tools for the [AI SDK](https://ai-sdk.dev), keyed by name as `generateText`, `streamText` and
+agents take them.
+
+```sh
+npm install viasocket-apps ai @ai-sdk/anthropic
+```
+
+```js
+import { ViaSocket } from 'viasocket-apps'
+import { viasocketTools } from 'viasocket-apps/ai-sdk'
+import { generateText, stepCountIs } from 'ai'
+import { anthropic } from '@ai-sdk/anthropic'
+
+const viasocket = new ViaSocket({
+  orgId: process.env.VIASOCKET_ORG_ID,
+  projectId: process.env.VIASOCKET_PROJECT_ID,
+  secret: process.env.VIASOCKET_EMBED_SECRET
+})
+
+const tools = await viasocketTools(viasocket, {
+  user: 'user_123', // the uniqueIdentifier the user connected their apps under
+  apps: ['slack', 'google-sheets'],
+  actions: { slack: ['send-message'], 'google-sheets': ['add-new-row-to-sheet', 'lookup-spreadsheet-rows'] }
+})
+
+const { text } = await generateText({
+  model: anthropic('claude-sonnet-5-5'), // any model the AI SDK supports
+  tools,
+  stopWhen: stepCountIs(5),
+  prompt: 'Post our Q3 numbers in #finance'
+})
+```
+
+Everything listed under [LangChain](#langchain) holds here too: the user connects the app first, pick
+the actions, `<app>_list-options` fills id fields, and an app's error comes back to the model as text.
+Needs `ai` 5 or later.
+
 ### Any other framework
 
 `agentTools(viasocket, options)` takes the same options and gives each tool as `{ name, description,
@@ -292,8 +331,8 @@ const tools = (await agentTools(viasocket, { user: 'user_123', apps: ['slack'] }
 )
 ```
 
-The same list, `<app>_list-options` included, works with the Vercel AI SDK (`jsonSchema(t.parameters)`),
-Mastra, the Claude Agent SDK or a plain tool-calling loop.
+The same list, `<app>_list-options` included, works with Mastra, the Claude Agent SDK or a plain
+tool-calling loop.
 
 ## MCP servers your users make
 
