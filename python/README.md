@@ -6,7 +6,7 @@ Row, HubSpot's Create Deal — any of 2,300+ apps, with no connector code and no
 Works with LangChain, CrewAI and LlamaIndex.
 
 It is the Python side of the [`viasocket-apps`](https://www.npmjs.com/package/viasocket-apps) npm
-package, and builds the same tools from the same catalog. No dependencies of its own; Python 3.9+.
+package, and builds the same tools from the same catalog. No dependencies of its own; Python 3.10+.
 
 ```sh
 pip install "viasocket[langchain]"     # or [crewai], [llamaindex]

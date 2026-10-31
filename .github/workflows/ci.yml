@@ -24,10 +24,13 @@ jobs:
   python:
     runs-on: ubuntu-latest
     strategy:
+      # One failing Python job leaves the others running, so every result is seen.
+      fail-fast: false
       matrix:
         include:
-          # 3.9 is the floor, with no framework; the framework tests (skipped where one is missing) run on 3.12.
-          - python: '3.9'
+          # 3.10 is the floor (LangChain 1 and CrewAI need it too), with no framework; the framework tests
+          # (skipped where one is missing) run on 3.12.
+          - python: '3.10'
             extras: ''
           - python: '3.12'
             extras: '[langchain,llamaindex]'

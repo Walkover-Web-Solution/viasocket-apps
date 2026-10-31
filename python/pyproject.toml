@@ -9,7 +9,7 @@ description = "viaSocket for Python agents: the 2,300+ apps each of your users c
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Walkover Web Solution" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = []
 keywords = ["viasocket", "integrations", "ai-agent", "langchain", "crewai", "llamaindex", "tools", "slack", "google-sheets"]
 classifiers = [
