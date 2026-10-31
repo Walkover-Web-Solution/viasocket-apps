@@ -1,0 +1,53 @@
+name: Publish Python package
+
+# Publishes python/ (the `viasocket` package on PyPI) with trusted publishing: PyPI trusts this workflow in
+# Walkover-Web-Solution/viasocket-apps, so no token is stored anywhere. A release is: set the version in
+# python/pyproject.toml, merge it, then push the tag py-v<that version> (for example py-v0.1.0).
+on:
+  push:
+    tags: ['py-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: The tag matches the version in pyproject.toml
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [ "py-v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "The tag $GITHUB_REF_NAME does not match version $version in python/pyproject.toml"
+            exit 1
+          fi
+      - run: python -m pip install --upgrade pip build pytest
+      - run: python -m pip install .
+      - run: python -m pytest
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: python/dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    # Matches the environment on PyPI's trusted publisher; add a required reviewer to it in the repo's settings
+    # if a tag alone should not publish.
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
