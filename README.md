@@ -112,6 +112,20 @@ instead of duplicate), and tests the URL with `tools/list` and `prompts/list`. `
 '<json>'` calls one tool as a client would, with `--token <t>` on a login server. The file's shape and
 every field: [flow.viasocket.com/documentation/skill/mcp.md](https://flow.viasocket.com/documentation/skill/mcp.md).
 
+### Connect an app from the command line
+
+To try the [agent tools](#agent-tools) before your product has a connect button:
+
+```sh
+npx viasocket-apps connect slack --user me
+```
+
+It reads the three values `setup` wrote, serves a one-button page on `127.0.0.1` that opens viaSocket's
+consent popup for that app (by its slug: `slack`, `gmail`, `google-sheets`), then enables the app for
+that user, reusing it if it is already enabled. `--user` is the end user it is for (default `me`), the
+same id your agent tools take; `--no-open` prints the page's URL instead of opening it. If the browser
+blocks the popup, allow popups for the page and click again.
+
 ## Server
 
 ```js
@@ -233,7 +247,23 @@ that user's own connection. Slack's Send Message, Google Sheets' Add New Row, Hu
 any of 2,300+ apps, no connector code and no OAuth on your side. The tools are plain JSON Schema, so
 any agent framework takes them; LangChain and the Vercel AI SDK have ready wrappers.
 
+### Try it in 5 minutes
+
+No frontend needed: you are the end user, and the terminal connects your own Slack.
+
+1. **Sign up** at [flow.viasocket.com](https://flow.viasocket.com) (free).
+2. **Get your keys:** in your project folder, run `npx viasocket-apps setup`. It opens the browser — sign in,
+   pick the workspace, click **Allow** — and writes `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID` and
+   `VIASOCKET_EMBED_SECRET` to `.env`.
+3. **Connect an app for yourself:** `npx viasocket-apps connect slack --user me`. It opens a page with one
+   button; sign in to Slack in the window it opens, and the command enables it.
+4. **Run an agent** with `user: 'me'` and `apps: ['slack']`, as below. Ask it to post in a channel.
+
+In your product, step 3 is the [connect popup](#browser) your users click, and `user` is each user's own id.
+
 ### LangChain
+
+New here? Start with [Try it in 5 minutes](#try-it-in-5-minutes): it gets you the three keys and a connected app.
 
 ```sh
 npm install viasocket-apps @langchain/core
@@ -261,9 +291,9 @@ await agent.invoke({ messages: [{ role: 'user', content: 'Post our Q3 numbers in
 ```
 
 - **The user connects the app first**, in your product, through the [connect popup](#browser) and
-  `user.enable()`. A tool for an app they have not connected answers the model "Slack is not
-  connected for this user", so the agent can ask them to; it starts working on the next call after
-  they do.
+  `user.enable()` — or, while you try it, `npx viasocket-apps connect slack --user <id>`. A tool for an
+  app they have not connected answers the model "Slack is not connected for this user", so the agent
+  can ask them to; it starts working on the next call after they do.
 - **Pick the actions.** An app left out of `actions` gives every published action as a tool — fine for
   a small app, too many for a large one (Notion has 57). Actions are named by `action_id` or by their
   path on the app's page (`send-message`).
@@ -280,7 +310,7 @@ Needs `@langchain/core` 0.3 or later.
 ### Vercel AI SDK
 
 The same tools for the [AI SDK](https://ai-sdk.dev), keyed by name as `generateText`, `streamText` and
-agents take them.
+agents take them. New here? Start with [Try it in 5 minutes](#try-it-in-5-minutes).
 
 ```sh
 npm install viasocket-apps ai @ai-sdk/anthropic

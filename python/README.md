@@ -16,6 +16,9 @@ You need three values: `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID` and `VIASOCKET
 `npx viasocket-apps setup` writes them to `.env` after one click in the browser; without it, copy them from the
 viaSocket dashboard (**Integrations → Create embed → Install Code**). The secret stays on your server.
 
+To try it before your product has a connect button, connect an app for yourself from the terminal:
+`npx viasocket-apps connect slack --user me`, then build the tools with `user="me"`.
+
 ```python
 import os
 from viasocket import ViaSocket

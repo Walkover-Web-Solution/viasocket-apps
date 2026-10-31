@@ -577,3 +577,103 @@ test('mcp moves an ids-only viasocket.mcp.json of the earlier layout, keeps the 
   assert.equal(Object.keys(mcp.state.skills).length, 1, 'the skill was made twice')
   assert.equal(JSON.parse(readFileSync(join(dir, 'viasocket.mcp.ids.json'), 'utf8')).skills.daily_review, ids.skills.daily_review)
 })
+
+// `npx viasocket-apps connect <app>` without a browser. A fake plays the catalog's slug lookup and the
+// embed API (the user's flows, enable); the test plays the page: it loads it and posts the authId the
+// popup would have sent back.
+async function fakeEmbed({ flows = [] } = {}) {
+  const seen = { enabled: [], tokens: [] }
+  let origin = ''
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url, origin)
+    const json = (status, body) => {
+      res.writeHead(status, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(body))
+    }
+    if (url.pathname === '/slug') {
+      const slug = url.searchParams.get('service')
+      return json(200, { data: { plugins: slug === 'slack' ? { slack: { rowid: 'rowbu58rc' } } : {} } })
+    }
+    seen.tokens.push(req.headers.authorization)
+    if (url.pathname === '/projects/proj1/integrations') return json(200, { success: true, data: { flows } })
+    const enable = url.pathname.match(/^\/embed\/enable\/([^/]+)\/([^/]+)$/)
+    if (enable && req.method === 'POST') {
+      seen.enabled.push({ serviceId: enable[1], authId: enable[2] })
+      return json(200, { success: true, data: { script_id: 'scriNEW', service_id: enable[1], auth_id: enable[2] } })
+    }
+    json(404, { success: false, message: 'not found' })
+  })
+  origin = `http://127.0.0.1:${await listen(server)}`
+  return { server, origin, seen }
+}
+
+function runConnect(args, fake, envFile) {
+  const env = { ...process.env, VIASOCKET_SLUG_URL: `${fake.origin}/slug`, VIASOCKET_API_URL: fake.origin }
+  const child = spawn(process.execPath, [bin, 'connect', ...args, '--no-open', '--env', envFile], { env, stdio: ['ignore', 'pipe', 'pipe'] })
+  const output = { text: '' }
+  child.stdout.on('data', (chunk) => (output.text += chunk))
+  child.stderr.on('data', (chunk) => (output.text += chunk))
+  const exited = new Promise((resolve) => child.on('exit', resolve))
+  /** Plays the page: loads it, then posts what the popup sent back. */
+  const browser = async (result) => {
+    const started = Date.now()
+    while (!/open (http:\/\/127\.0\.0\.1:\d+\/)/.test(output.text)) {
+      assert.ok(Date.now() - started < 10000, `the command did not print its page:\n${output.text}`)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    const pageUrl = output.text.match(/open (http:\/\/127\.0\.0\.1:\d+\/)/)[1]
+    const html = await (await fetch(pageUrl)).text()
+    const nonce = html.match(/\/done\?nonce=([0-9a-f]+)/)[1]
+    const forged = await fetch(`${pageUrl}done?nonce=wrong`, { method: 'POST', body: JSON.stringify(result) })
+    assert.equal(forged.status, 404, 'a post without the page nonce is ignored')
+    await fetch(`${pageUrl}done?nonce=${nonce}`, { method: 'POST', body: JSON.stringify(result) })
+    return html
+  }
+  return { exited, output, browser }
+}
+
+const embedEnv = 'VIASOCKET_ORG_ID=4160\nVIASOCKET_PROJECT_ID=proj1\nVIASOCKET_EMBED_SECRET=s3cret\n'
+
+test('connect opens the popup page for the app and enables the connection for that user', async (t) => {
+  const fake = await fakeEmbed()
+  t.after(() => fake.server.close())
+  const { exited, output, browser } = runConnect(['slack', '--user', 'user_9'], fake, tempEnv(embedEnv))
+  const html = await browser({ authId: 'auth1_rowbu58rc' })
+  assert.equal(await exited, 0, output.text)
+  assert.match(html, /flow\.viasocket\.com\/connect\.js/)
+  assert.match(html, /openViasocketConnection\(".+", "rowbu58rc"\)/)
+  assert.deepEqual(fake.seen.enabled, [{ serviceId: 'rowbu58rc', authId: 'auth1_rowbu58rc' }])
+  // The calls carry the embed token signed for that user, exactly as the package signs it.
+  const { signEmbedToken } = await import('../dist/esm/index.js')
+  const expected = await signEmbedToken({ orgId: '4160', projectId: 'proj1', uniqueIdentifier: 'user_9', secret: 's3cret' })
+  assert.ok(fake.seen.tokens.every((token) => token === expected))
+  assert.match(output.text, /slack is connected for user "user_9" and enabled/)
+})
+
+test('connect reuses an app the user already enabled instead of enabling it twice', async (t) => {
+  const fake = await fakeEmbed({ flows: [{ id: 'scriOLD', status: 'paused', service_id: 'rowbu58rc', auth_id: 'a0' }] })
+  t.after(() => fake.server.close())
+  const { exited, output, browser } = runConnect(['slack'], fake, tempEnv(embedEnv))
+  await browser({ authId: 'auth2_rowbu58rc' })
+  assert.equal(await exited, 0, output.text)
+  assert.deepEqual(fake.seen.enabled, [])
+  assert.match(output.text, /connected for user "me" \(it was already enabled\)/)
+})
+
+test('connect reports a refusal from the popup, and refuses an unknown slug or a missing setup', async (t) => {
+  const fake = await fakeEmbed()
+  t.after(() => fake.server.close())
+  const refused = runConnect(['slack'], fake, tempEnv(embedEnv))
+  await refused.browser({ error: 'access_denied' })
+  assert.equal(await refused.exited, 1)
+  assert.match(refused.output.text, /slack was not connected: access_denied/)
+
+  const unknown = runConnect(['slak'], fake, tempEnv(embedEnv))
+  assert.equal(await unknown.exited, 1)
+  assert.match(unknown.output.text, /No viaSocket app has the slug "slak"/)
+
+  const noSetup = runConnect(['slack'], fake, tempEnv('OTHER=1\n'))
+  assert.equal(await noSetup.exited, 1)
+  assert.match(noSetup.output.text, /Run `npx viasocket-apps setup` first/)
+  assert.deepEqual(fake.seen.enabled, [])
+})
