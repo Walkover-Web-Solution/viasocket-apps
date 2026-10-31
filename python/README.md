@@ -12,8 +12,9 @@ package, and builds the same tools from the same catalog. No dependencies of its
 pip install "viasocket[langchain]"     # or [crewai], [llamaindex]
 ```
 
-You need three values from the viaSocket dashboard (**Integrations → Create embed → Install Code**):
-`VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID` and `VIASOCKET_EMBED_SECRET`. The secret stays on your server.
+You need three values: `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID` and `VIASOCKET_EMBED_SECRET`. With Node.js,
+`npx viasocket-apps setup` writes them to `.env` after one click in the browser; without it, copy them from the
+viaSocket dashboard (**Integrations → Create embed → Install Code**). The secret stays on your server.
 
 ```python
 import os

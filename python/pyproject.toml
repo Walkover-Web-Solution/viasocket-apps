@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "viasocket"
-version = "0.1.0"
+dynamic = ["version"]
 description = "viaSocket for Python agents: the 2,300+ apps each of your users connected (Slack, Google Sheets, HubSpot, Notion...) as tools for LangChain, CrewAI and LlamaIndex."
 readme = "README.md"
 license = "MIT"
@@ -14,7 +14,6 @@ dependencies = []
 keywords = ["viasocket", "integrations", "ai-agent", "langchain", "crewai", "llamaindex", "tools", "slack", "google-sheets"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
 
@@ -26,6 +25,10 @@ llamaindex = ["llama-index-core>=0.12"]
 [project.urls]
 Homepage = "https://github.com/Walkover-Web-Solution/viasocket-apps/tree/main/python#readme"
 Source = "https://github.com/Walkover-Web-Solution/viasocket-apps"
+
+# The version lives once, in src/viasocket/__init__.py (`__version__`).
+[tool.hatch.version]
+path = "src/viasocket/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/viasocket"]

@@ -2,7 +2,7 @@ name: Publish Python package
 
 # Publishes python/ (the `viasocket` package on PyPI) with trusted publishing: PyPI trusts this workflow in
 # Walkover-Web-Solution/viasocket-apps, so no token is stored anywhere. A release is: set the version in
-# python/pyproject.toml, merge it, then push the tag py-v<that version> (for example py-v0.1.0).
+# python/src/viasocket/__init__.py (`__version__`), merge it, then push the tag py-v<that version> (py-v0.1.0).
 on:
   push:
     tags: ['py-v*']
@@ -21,17 +21,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: The tag matches the version in pyproject.toml
-        run: |
-          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
-          if [ "py-v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "The tag $GITHUB_REF_NAME does not match version $version in python/pyproject.toml"
-            exit 1
-          fi
       - run: python -m pip install --upgrade pip build pytest
       - run: python -m pip install .
       - run: python -m pytest
       - run: python -m build
+      - name: The tag matches the version in src/viasocket/__init__.py
+        run: |
+          wheel="dist/viasocket-${GITHUB_REF_NAME#py-v}-py3-none-any.whl"
+          if [ ! -f "$wheel" ]; then
+            echo "The tag $GITHUB_REF_NAME does not match __version__ in python/src/viasocket/__init__.py; built: $(ls dist)"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: dist
