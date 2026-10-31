@@ -9,8 +9,23 @@ It is the Python side of the [`viasocket-apps`](https://www.npmjs.com/package/vi
 package, and builds the same tools from the same catalog. No dependencies of its own; Python 3.10+.
 
 ```sh
-pip install "viasocket[langchain]"     # or [crewai], [llamaindex]
+pip install "viasocket[langchain]"     # pick your framework: [langchain], [crewai] or [llamaindex]
 ```
+
+The part in brackets installs that framework with the package. Plain `pip install viasocket` is enough when the
+framework is already installed, or for any other framework (`viasocket.agent_tools`, below).
+
+## For coding agents
+
+Working with Claude Code, Cursor, Codex, Copilot or another coding agent? Give it the viaSocket skill: it walks
+the agent through the whole integration (the three keys, connecting a user's apps, the calls, testing) on the
+live catalog.
+
+```sh
+npx skills add Walkover-Web-Solution/viasocket-apps
+```
+
+No Node.js? Paste this into your agent: `Read https://flow.viasocket.com/documentation/skill.md?format=http and follow it.`
 
 You need three values: `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID` and `VIASOCKET_EMBED_SECRET`. With Node.js,
 `npx viasocket-apps setup` writes them to `.env` after one click in the browser; without it, copy them from the
