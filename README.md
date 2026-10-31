@@ -316,6 +316,24 @@ Everything listed under [LangChain](#langchain) holds here too: the user connect
 the actions, `<app>_list-options` fills id fields, and an app's error comes back to the model as text.
 Needs `ai` 5 or later.
 
+### Python
+
+The same tools for Python agents (LangChain, CrewAI and LlamaIndex) are the PyPI package
+[`viasocket`](https://pypi.org/project/viasocket/), from the same catalog and with the same names:
+
+```sh
+pip install "viasocket[langchain]"     # or [crewai], [llamaindex]
+```
+
+```python
+from viasocket import ViaSocket
+from viasocket.langchain import viasocket_tools
+
+tools = viasocket_tools(viasocket, user="user_123", apps=["slack"], actions={"slack": ["send-message"]})
+```
+
+Its README: [python/README.md](python/README.md).
+
 ### Any other framework
 
 `agentTools(viasocket, options)` takes the same options and gives each tool as `{ name, description,
