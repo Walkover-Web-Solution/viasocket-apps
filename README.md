@@ -42,14 +42,14 @@ npx skills add Walkover-Web-Solution/viasocket-apps
 ```
 
 Add `-g` to install it for every project. No install? Paste this into your agent:
-`Read https://flow.viasocket.com/documentation/skill.md and follow it.`
+`Read https://viasocket.com/docs/skill.md and follow it.`
 
 The agent needs three values from the viaSocket dashboard (**Integrations → Create embed →
 Install Code**): `org_id` and `project_id`, which the dashboard's "Copy prompt" hands it, and
 `VIASOCKET_EMBED_SECRET`, which goes in your server's `.env`.
 [skills/viasocket-integrations/SKILL.md](skills/viasocket-integrations/SKILL.md) is the install
 file: the description that makes an agent load the skill, and one instruction — fetch the current
-skill, `https://flow.viasocket.com/documentation/skill.md`, every time it is used — so an install
+skill, `https://viasocket.com/docs/skill.md`, every time it is used — so an install
 never goes stale.
 
 Before you ship — with or without an agent — check the code against the live catalog:
@@ -110,7 +110,7 @@ or updates the server, its tools, skills and prompts on `mcp.viasocket.com`, rem
 longer lists, keeps every id in `viasocket.mcp.ids.json` (commit it: it is what makes a rerun update
 instead of duplicate), and tests the URL with `tools/list` and `prompts/list`. `--call <tool> --args
 '<json>'` calls one tool as a client would, with `--token <t>` on a login server. The file's shape and
-every field: [flow.viasocket.com/documentation/skill/mcp.md](https://flow.viasocket.com/documentation/skill/mcp.md).
+every field: [viasocket.com/docs/skill/mcp.md](https://viasocket.com/docs/skill/mcp.md).
 
 ### Connect an app from the command line
 
@@ -145,7 +145,7 @@ const embedToken = await user.token()
 const serviceId = await user.serviceIdFor('google-sheets')
 
 // The app is named by its slug and each action or trigger by its key, as the app's page lists them
-// (https://flow.viasocket.com/documentation/google-sheets.md) and as listActions returns them. Pin
+// (https://viasocket.com/docs/google-sheets.md) and as listActions returns them. Pin
 // the version your code fills the inputData for; a newer version may change the fields.
 const { actions } = await user.listActions('google-sheets') // [{ key, name, type, version, versions, … }]
 
@@ -244,7 +244,7 @@ const socket = await user.ai.rtlayerToken() // for a chat UI: the browser subscr
 ```
 
 The whole contract — tools, JSON answers, the websocket path and what arrives on it — is
-[flow.viasocket.com/documentation/ai.md](https://flow.viasocket.com/documentation/ai.md).
+[viasocket.com/docs/ai.md](https://viasocket.com/docs/ai.md).
 
 ## Agent tools
 
@@ -491,7 +491,7 @@ await viasocket.login.logout(proxyAuthToken) // then clear your cookie
 ```
 
 The screens, the callback and the setup are in
-[flow.viasocket.com/documentation/skill/login-and-orgs.md](https://flow.viasocket.com/documentation/skill/login-and-orgs.md).
+[viasocket.com/docs/skill/login-and-orgs.md](https://viasocket.com/docs/skill/login-and-orgs.md).
 
 ## Methods
 

@@ -1,7 +1,7 @@
 /**
  * Login, users and organisations, from 36Blocks: the calls the product's server makes with a signed-in
  * user's `proxy_auth_token`. 36Blocks keeps the accounts; the login screens are its script in the browser
- * (https://flow.viasocket.com/documentation/skill/login-and-orgs.md).
+ * (https://viasocket.com/docs/skill/login-and-orgs.md).
  *
  * Separate from the viaSocket calls because the host, header and envelope differ: the token goes in a
  * `proxy_auth_token` header, and a refusal is `{ data: { message }, status: "error", hasError: true,

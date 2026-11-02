@@ -25,7 +25,7 @@ live catalog.
 npx skills add Walkover-Web-Solution/viasocket-apps
 ```
 
-No Node.js? Paste this into your agent: `Read https://flow.viasocket.com/documentation/skill.md?format=http and follow it.`
+No Node.js? Paste this into your agent: `Read https://viasocket.com/docs/skill.md?format=http and follow it.`
 
 You need three values: `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID` and `VIASOCKET_EMBED_SECRET`. With Node.js,
 `npx viasocket-apps setup` writes them to `.env` after one click in the browser; without it, copy them from the

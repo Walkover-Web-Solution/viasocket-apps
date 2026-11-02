@@ -777,7 +777,7 @@ export class UserScope {
    * The AI API: a chat assistant viaSocket runs for this user — threads and history kept per
    * `unique_identifier`, your prompt per call, your own endpoints as its tools. Backend only, like
    * everything else here: the prompt and the tools' headers are yours to keep off the browser.
-   * The whole contract is https://flow.viasocket.com/documentation/ai.md.
+   * The whole contract is https://viasocket.com/docs/ai.md.
    */
   readonly ai = {
     /**
