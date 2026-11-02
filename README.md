@@ -346,13 +346,37 @@ Everything listed under [LangChain](#langchain) holds here too: the user connect
 the actions, `<app>_list-options` fills id fields, and an app's error comes back to the model as text.
 Needs `ai` 5 or later.
 
+### Mastra
+
+[Mastra](https://mastra.ai) agents take AI SDK tools as they are, so `viasocket-apps/ai-sdk` is all it needs:
+
+```js
+import { Agent } from '@mastra/core/agent'
+import { ViaSocket } from 'viasocket-apps'
+import { viasocketTools } from 'viasocket-apps/ai-sdk'
+
+const viasocket = new ViaSocket({
+  orgId: process.env.VIASOCKET_ORG_ID,
+  projectId: process.env.VIASOCKET_PROJECT_ID,
+  secret: process.env.VIASOCKET_EMBED_SECRET
+})
+
+const agent = new Agent({
+  id: 'ops-agent',
+  name: 'Ops agent',
+  instructions: 'Keep the team updated in Slack.',
+  model: 'openai/gpt-4o-mini',
+  tools: await viasocketTools(viasocket, { user: 'user_123', apps: ['slack'], actions: { slack: ['send-message'] } })
+})
+```
+
 ### Python
 
-The same tools for Python agents (LangChain, CrewAI and LlamaIndex) are the PyPI package
+The same tools for Python agents (LangChain, CrewAI, LlamaIndex and Google ADK) are the PyPI package
 [`viasocket`](https://pypi.org/project/viasocket/), from the same catalog and with the same names:
 
 ```sh
-pip install "viasocket[langchain]"     # or [crewai], [llamaindex]
+pip install "viasocket[langchain]"     # or [crewai], [llamaindex], [adk]
 ```
 
 ```python
