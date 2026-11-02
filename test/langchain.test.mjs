@@ -37,9 +37,21 @@ const SEND_MESSAGE = {
 const CATALOG = {
   service: { name: 'Slack', auth_type: 'OAuth2' },
   actions: [
-    { name: 'Send Message', description: 'Send a message.', action_id: 'act1', action_version_id: 'ver1', input_schema: SEND_MESSAGE }
+    { name: 'Send Message', description: 'Send a message.', action_id: 'rowact1', action_version_id: 'rowver1', input_schema: SEND_MESSAGE }
   ],
   triggers: []
+}
+
+/** The app's listing by slug: the keys the calls take, joined to the catalog's schemas by action_id. */
+const LISTING = {
+  success: true,
+  data: {
+    service: 'slack',
+    service_id: 'rowbu58rc',
+    actions: [
+      { key: 'Send_Message', name: 'Send Message', type: 'action', description: 'Send a message.', action_id: 'rowact1', version: 'V107', action_version_id: 'rowver1', versions: [] }
+    ]
+  }
 }
 
 function fakeFetch({ flows = [] } = {}) {
@@ -47,21 +59,21 @@ function fakeFetch({ flows = [] } = {}) {
   const fetchImpl = async (url, init = {}) => {
     url = String(url)
     calls.push({ url, method: init.method ?? 'GET', body: init.body })
-    const reply = url.includes('/embed/list-options/')
-      ? {
-          success: true,
-          data: [
-            { label: '#general', value: 'C1' },
-            { label: '#random', value: 'C2' }
-          ]
-        }
-      : url.includes('recommend/services')
-        ? { data: { plugins: { slack: { rowid: 'rowbu58rc' } } } }
-        : url.endsWith('/func/scriK4LFg2kc')
-          ? CATALOG
-          : url.includes('/integrations')
-            ? { success: true, data: { flows } }
-            : { success: true, data: { ok: true } }
+    const options = {
+      label: '#general',
+      value: 'C1'
+    }
+    const reply = url.includes('/embed/services/slack/actions/Send_Message/options')
+      ? { success: true, data: { options: [options, { label: '#random', value: 'C2' }], paginate: null, has_more: false } }
+      : url.includes('/embed/list-options/')
+        ? { success: true, data: [options, { label: '#random', value: 'C2' }] }
+        : url.includes('/embed/services/slack/actions')
+          ? LISTING
+          : url.endsWith('/api/v1/plugins/rowbu58rc/actions')
+            ? CATALOG
+            : url.includes('/integrations')
+              ? { success: true, data: { flows } }
+              : { success: true, data: { ok: true } }
     return new Response(JSON.stringify(reply), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
   return { fetchImpl, calls }
@@ -93,7 +105,7 @@ test('viasocketTools: one tool per action, run on the script the user enabled', 
   const input = { destination: { messageto: 'channel', channel_id: ['C1'] }, text: 'hi' }
   assert.equal(await send.invoke(input), '{"ok":true}')
   const run = calls.find((call) => call.url.endsWith('/func/scriSLACK'))
-  assert.deepEqual(JSON.parse(run.body), { action_version_id: 'ver1', inputData: input })
+  assert.deepEqual(JSON.parse(run.body), { action_version_id: 'rowver1', inputData: input })
 })
 
 test('viasocketTools: an app the user has not connected is a sentence for the model, not a throw', async () => {
@@ -139,14 +151,26 @@ test('viasocketTools: an id field names the list-options tool, which reads the u
     ],
     more: false
   })
-  const listed = calls.find((call) => call.url.includes('/embed/list-options/ver1'))
+  // Named by key, so the field searches and pages on viaSocket's side.
+  const listed = calls.find((call) => call.url.includes('/embed/services/slack/actions/Send_Message/options'))
   assert.deepEqual(JSON.parse(listed.body), {
-    fieldKey: 'destination.channel_id',
     auth_id: 'a1',
-    existingFields: { destination: { messageto: 'channel' }, _searchText: 'gen' }
+    fieldKey: 'destination.channel_id',
+    existingFields: { destination: { messageto: 'channel' } },
+    search: 'gen'
   })
   // `tool` is an enum, so LangChain itself refuses a tool the model made up
   await assert.rejects(() => options.invoke({ tool: 'nope', field: 'x' }), /did not match expected schema/)
+})
+
+test('viasocketTools: an action is also chosen by its key, as the listing names it', async () => {
+  const { fetchImpl, calls } = fakeFetch({ flows: [enabledSlack] })
+  const viasocket = new ViaSocket({ orgId: 'o', projectId: 'p', secret: 's', fetch: fetchImpl })
+  const [send] = await viasocketTools(viasocket, { user: 'user_123', apps: ['slack'], actions: { slack: ['send_message'] } })
+  assert.equal(send.name, 'slack_send-message')
+  // The app is resolved through its listing, never through the slug service.
+  assert.ok(calls.some((call) => call.url.endsWith('/embed/services/slack/actions?type=action') || call.url.endsWith('/embed/services/slack/actions')))
+  assert.ok(!calls.some((call) => call.url.includes('recommend/services')))
 })
 
 test('viasocketTools: no list-options tool for an app whose chosen actions have no id field', async () => {
@@ -156,8 +180,8 @@ test('viasocketTools: no list-options tool for an app whose chosen actions have 
   CATALOG.actions.push({
     name: 'Set Status',
     description: 'Set status.',
-    action_id: 'act2',
-    action_version_id: 'ver2',
+    action_id: 'rowact2',
+    action_version_id: 'rowver2',
     input_schema: plain
   })
   try {

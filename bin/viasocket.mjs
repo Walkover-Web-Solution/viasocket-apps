@@ -893,7 +893,6 @@ async function mcpCommand(options, envFile) {
 
 /** viaSocket's connect script: the only supported way to open the consent popup. */
 const CONNECT_SCRIPT = process.env.VIASOCKET_CONNECT_SCRIPT || 'https://flow.viasocket.com/connect.js'
-const SLUG_URL = process.env.VIASOCKET_SLUG_URL || 'https://plug-service.viasocket.com/api/v1/plugins/recommend/services'
 
 const base64Url = (buffer) => Buffer.from(buffer).toString('base64url')
 
@@ -920,10 +919,14 @@ async function embedApi(token, method, path, body) {
   return reply?.data
 }
 
-async function serviceIdFor(slug) {
-  const response = await fetch(`${SLUG_URL}?service=${encodeURIComponent(slug)}`, { signal: AbortSignal.timeout(30_000) }).catch(() => null)
-  const reply = response?.ok ? await response.json().catch(() => null) : null
-  return reply?.data?.plugins?.[slug]?.rowid || ''
+/** The app by its slug, as viaSocket lists it for this user: its service_id (the popup takes it) or '' for an unknown slug. */
+async function serviceIdFor(token, slug) {
+  try {
+    const listing = await embedApi(token, 'GET', `/embed/services/${encodeURIComponent(slug)}/actions?type=action`)
+    return listing?.service_id || ''
+  } catch {
+    return ''
+  }
 }
 
 /**
@@ -1009,13 +1012,13 @@ async function connectCommand(options, envFile) {
     process.exitCode = 1
     return
   }
-  const serviceId = await serviceIdFor(options.app)
+  const token = embedToken(orgId, projectId, options.user, secret)
+  const serviceId = await serviceIdFor(token, options.app)
   if (!serviceId) {
     console.error(`No viaSocket app has the slug "${options.app}". Slugs are exact and lowercase, such as slack, gmail or google-sheets.`)
     process.exitCode = 1
     return
   }
-  const token = embedToken(orgId, projectId, options.user, secret)
 
   const result = await waitForConnection({
     app: options.app,
@@ -1041,7 +1044,7 @@ async function connectCommand(options, envFile) {
   // Enable once, so actions can run; an app this user already enabled is reused, never enabled twice.
   const flows = (await embedApi(token, 'GET', `/projects/${projectId}/integrations`))?.flows ?? []
   const existing = flows.find((flow) => flow.service_id === serviceId && (flow.status === 'active' || flow.status === 'paused'))
-  if (!existing) await embedApi(token, 'POST', `/embed/enable/${serviceId}/${result.authId}`, '')
+  if (!existing) await embedApi(token, 'POST', `/embed/services/${encodeURIComponent(options.app)}/enable/${result.authId}`, '')
   console.log(`${options.app} is connected for user "${options.user}"${existing ? ' (it was already enabled)' : ' and enabled'}.`)
   console.log(`Your agent's tools for it work now, for example: viasocketTools(viasocket, { user: '${options.user}', apps: ['${options.app}'] })`)
   process.exitCode = 0

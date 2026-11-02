@@ -578,9 +578,9 @@ test('mcp moves an ids-only viasocket.mcp.json of the earlier layout, keeps the 
   assert.equal(JSON.parse(readFileSync(join(dir, 'viasocket.mcp.ids.json'), 'utf8')).skills.daily_review, ids.skills.daily_review)
 })
 
-// `npx viasocket-apps connect <app>` without a browser. A fake plays the catalog's slug lookup and the
-// embed API (the user's flows, enable); the test plays the page: it loads it and posts the authId the
-// popup would have sent back.
+// `npx viasocket-apps connect <app>` without a browser. A fake plays the embed API (the app's listing by
+// slug, the user's flows, enable); the test plays the page: it loads it and posts the authId the popup
+// would have sent back.
 async function fakeEmbed({ flows = [] } = {}) {
   const seen = { enabled: [], tokens: [] }
   let origin = ''
@@ -590,16 +590,17 @@ async function fakeEmbed({ flows = [] } = {}) {
       res.writeHead(status, { 'content-type': 'application/json' })
       res.end(JSON.stringify(body))
     }
-    if (url.pathname === '/slug') {
-      const slug = url.searchParams.get('service')
-      return json(200, { data: { plugins: slug === 'slack' ? { slack: { rowid: 'rowbu58rc' } } : {} } })
-    }
     seen.tokens.push(req.headers.authorization)
+    const listing = url.pathname.match(/^\/embed\/services\/([^/]+)\/actions$/)
+    if (listing) {
+      if (listing[1] !== 'slack') return json(404, { success: false, message: `Unknown service '${listing[1]}'.` })
+      return json(200, { success: true, data: { service: 'slack', service_id: 'rowbu58rc', actions: [] } })
+    }
     if (url.pathname === '/projects/proj1/integrations') return json(200, { success: true, data: { flows } })
-    const enable = url.pathname.match(/^\/embed\/enable\/([^/]+)\/([^/]+)$/)
+    const enable = url.pathname.match(/^\/embed\/services\/([^/]+)\/enable\/([^/]+)$/)
     if (enable && req.method === 'POST') {
-      seen.enabled.push({ serviceId: enable[1], authId: enable[2] })
-      return json(200, { success: true, data: { script_id: 'scriNEW', service_id: enable[1], auth_id: enable[2] } })
+      seen.enabled.push({ app: enable[1], authId: enable[2] })
+      return json(201, { success: true, data: { script_id: 'scriNEW', service: enable[1], service_id: 'rowbu58rc', auth_id: enable[2] } })
     }
     json(404, { success: false, message: 'not found' })
   })
@@ -608,7 +609,7 @@ async function fakeEmbed({ flows = [] } = {}) {
 }
 
 function runConnect(args, fake, envFile) {
-  const env = { ...process.env, VIASOCKET_SLUG_URL: `${fake.origin}/slug`, VIASOCKET_API_URL: fake.origin }
+  const env = { ...process.env, VIASOCKET_API_URL: fake.origin }
   const child = spawn(process.execPath, [bin, 'connect', ...args, '--no-open', '--env', envFile], { env, stdio: ['ignore', 'pipe', 'pipe'] })
   const output = { text: '' }
   child.stdout.on('data', (chunk) => (output.text += chunk))
@@ -642,7 +643,7 @@ test('connect opens the popup page for the app and enables the connection for th
   assert.equal(await exited, 0, output.text)
   assert.match(html, /flow\.viasocket\.com\/connect\.js/)
   assert.match(html, /openViasocketConnection\(".+", "rowbu58rc"\)/)
-  assert.deepEqual(fake.seen.enabled, [{ serviceId: 'rowbu58rc', authId: 'auth1_rowbu58rc' }])
+  assert.deepEqual(fake.seen.enabled, [{ app: 'slack', authId: 'auth1_rowbu58rc' }])
   // The calls carry the embed token signed for that user, exactly as the package signs it.
   const { signEmbedToken } = await import('../dist/esm/index.js')
   const expected = await signEmbedToken({ orgId: '4160', projectId: 'proj1', uniqueIdentifier: 'user_9', secret: 's3cret' })

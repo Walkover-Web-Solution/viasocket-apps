@@ -22,6 +22,8 @@ import type {
   AiSend,
   AiSendParams,
   AiThread,
+  AppAction,
+  AppActions,
   BuiltInApp,
   CatalogAction,
   CatalogApp,
@@ -33,12 +35,15 @@ import type {
   Flow,
   MemoryToken,
   FlowStatus,
+  ListActionsParams,
   ListOptionsParams,
   ListAppsParams,
   ListOptionsResult,
   LoginUser,
   Option,
   RenameFlowParams,
+  RunActionOptions,
+  RunCodeOptions,
   SubscribeParams,
   SubscribeResult,
   UpdateSubscriptionParams,
@@ -59,8 +64,8 @@ const DEFAULT_MCP_API_BASE_URL = 'https://mcp.viasocket.com/api'
 const CATALOG = {
   search: 'https://flow.sokt.io/func/scri12BSufQM',
   list: 'https://plug-service.viasocket.com/api/v1/plugins/all',
-  versions: 'https://flow.sokt.io/func/scriK4LFg2kc',
-  slug: 'https://plug-service.viasocket.com/api/v1/plugins/recommend/services'
+  /** `/<slug or service_id>` is the app, `/<slug or service_id>/actions` the app with its published actions and triggers. */
+  plugins: 'https://plug-service.viasocket.com/api/v1/plugins'
 }
 const LIST_LIMIT_MAX = 200
 /** The run-host function that fetches one real event of a trigger for one connection. */
@@ -69,10 +74,13 @@ const SAMPLE_EVENT_FUNCTION = 'scrijZpnr8zJ'
 export const BUILT_IN_PLUG_CATEGORIES = ['SDK'] as const
 /** The list answers an empty page for a category with `limit=200`; stay under it. */
 const BUILT_IN_PAGE = 100
-/** An unknown slug is answered by nothing, slowly; a known one in well under a second. */
-const SLUG_TIMEOUT_MS = 30_000
 /** How long `versionIdFor` trusts its copy of an app's catalog. */
 const VERSIONS_TTL_MS = 10 * 60_000
+/** How long `user.listActions` trusts its copy of an app's actions: keys and versions change rarely. */
+const APPS_TTL_MS = 10 * 60_000
+
+/** A `service_id`, an `action_version_id` or a `trigger_version_id`: a row id, as the id-based routes take them. */
+const isRowId = (value: string) => /^row[a-z0-9]+$/i.test(value)
 
 /** `Send Message` → `send-message`: an event's path on its documentation page. */
 const eventPath = (name: string) =>
@@ -102,6 +110,8 @@ export class ViaSocket {
   private readonly serviceIds = new Map<string, Promise<string>>()
   /** service_id → its catalog, for `versionIdFor`; a failed read is dropped, never kept. */
   private readonly versionsCache = new Map<string, { at: number; value: Promise<CatalogVersions | null> }>
+  /** slug → the app's actions, for `user.listActions`; shared by every user scope. @internal */
+  readonly appsCache = new Map<string, { at: number; value: Promise<AppActions> }>()
 
   constructor(options: ViaSocketOptions) {
     this.orgId = required('orgId', options?.orgId)
@@ -165,9 +175,9 @@ export class ViaSocket {
       }))
     },
     /**
-     * The `service_id` of the app with this slug (`slack`, `google-sheets`) — how code names a fixed
-     * app. Exact and case-sensitive; an unknown slug is a ViaSocketError, never a guess (it can take
-     * up to 30 s to be told so). Cached for the life of the process.
+     * The `service_id` of the app with this slug (`slack`, `google-sheets`), from the public catalog.
+     * Exact and case-sensitive; an unknown slug is a ViaSocketError, never a guess. Cached for the life
+     * of the process. `user.serviceIdFor(slug)` answers the same from the app's listing.
      */
     serviceIdFor: (slug: string): Promise<string> => {
       const key = required('slug', slug)
@@ -180,11 +190,15 @@ export class ViaSocket {
       return found
     },
     /**
-     * The version id `runAction`, `listOptions` and `subscribe` take, for one event of an app, read
-     * from the live catalog. `event` is the event's `action_id` / `trigger_id` (it survives a rename)
-     * or its path on the app's page (`send-message`). `version` is the one your code was written
-     * against (`V107`): when the app has published another, this warns and returns the published one —
-     * reread the event's page and update the code. Cached 10 minutes per app.
+     * @deprecated Name the action by its key instead: `user.listActions(slug)` lists the keys and
+     * versions, and `runAction`, `listOptions` and `subscribe` take them. This stays for code
+     * written against the id-based routes.
+     *
+     * The version id the id-based routes take, for one event of an app, read from the live
+     * catalog. `event` is the event's `action_id` / `trigger_id` (it survives a rename) or its path
+     * on the app's page (`send-message`). `version` is the one your code was written against
+     * (`V107`): when the app has published another, this warns and returns the published one.
+     * Cached 10 minutes per app.
      */
     versionIdFor: async (serviceId: string, event: string, version?: string): Promise<string> => {
       const wanted = required('event', event).trim()
@@ -192,14 +206,16 @@ export class ViaSocket {
       if (!app) throw new ViaSocketError(`versionIdFor: no app has the service id "${serviceId}"`, { status: null })
       // Each event with the version id the calls take, whichever kind it is.
       const all = [
-        ...app.actions.map((e) => ({ id: e.action_id, versionId: e.action_version_id, name: e.name, versionid: e.versionid })),
-        ...app.triggers.map((e) => ({ id: e.trigger_id, versionId: e.trigger_version_id, name: e.name, versionid: e.versionid }))
+        ...app.actions.map((e) => ({ id: e.action_id, versionId: e.action_version_id, key: e.key, name: e.name, versionid: e.versionid })),
+        ...app.triggers.map((e) => ({ id: e.trigger_id, versionId: e.trigger_version_id, key: e.key, name: e.name, versionid: e.versionid }))
       ]
-      const byId = all.filter((e) => e.id === wanted)
+      // Named by its key (`Send_Email`, as the readable routes take it), its id, or its page path.
+      const byKey = all.filter((e) => e.key === wanted)
+      const byId = byKey.length ? byKey : all.filter((e) => e.id === wanted)
       const found = byId.length ? byId : all.filter((e) => eventPath(e.name) === wanted)
       if (found.length !== 1) {
         throw new ViaSocketError(
-          `versionIdFor: ${app.service.name} has ${found.length ? 'several events' : 'no published event'} "${wanted}" — use its action_id / trigger_id from the app's page`,
+          `versionIdFor: ${app.service.name} has ${found.length ? 'several events' : 'no published event'} "${wanted}" — use its key or action_id / trigger_id from the app's page`,
           { status: null }
         )
       }
@@ -245,12 +261,18 @@ export class ViaSocket {
      * Cache it per app; ids are stable and schemas change rarely.
      */
     versions: async (serviceId: string): Promise<CatalogVersions | null> => {
-      const { data } = await request<Record<string, unknown>>({
-        method: 'POST',
-        url: CATALOG.versions,
-        body: JSON.stringify({ service_id: required('serviceId', serviceId) }),
-        fetchImpl: this.transport
-      })
+      let data: Record<string, unknown> | null
+      try {
+        ;({ data } = await request<Record<string, unknown>>({
+          method: 'GET',
+          url: `${CATALOG.plugins}/${encodeURIComponent(required('serviceId', serviceId))}/actions`,
+          fetchImpl: this.transport
+        }))
+      } catch (error) {
+        // An unknown app is a 404, not a failure: there is nothing to list.
+        if (error instanceof ViaSocketError && error.status === 404) return null
+        throw error
+      }
       // No `success` key, so the body arrives whole as `data`; tolerate an envelope anyway.
       const body = (data && 'service' in data ? data : (data?.data as Record<string, unknown> | undefined)) ?? {}
       const service = body.service as CatalogService | undefined
@@ -310,14 +332,43 @@ export class ViaSocket {
   }
 
   /**
-   * Runs one action. No token: the script_id from `user.enable()` is the credential, which is
-   * exactly why this call belongs on your server.
+   * Runs one action of the app a `scriptId` was enabled for: `action` is its key as
+   * `user.listActions` lists it (`'Send_Email'`), `options.version` pins a version (`'v55'`, the
+   * published one when left out). The result is the app's own response; a failure is a
+   * `ViaSocketError` carrying the app's message, with the status the app answered in `body.errorMsg`.
+   *
+   * No token: the script_id from `user.enable()` is the credential, which is exactly why this call
+   * belongs on your server. An `action_version_id` is still taken in place of the key, for code
+   * written against the id-based routes and for apps enabled before 0.17 (their flows take only that).
    */
-  async runAction<T = unknown>(scriptId: string, actionVersionId: string, inputData: Record<string, unknown>): Promise<T> {
+  async runAction<T = unknown>(scriptId: string, action: string, inputData: Record<string, unknown> = {}, options: RunActionOptions = {}): Promise<T> {
+    const named = required('action', action)
+    const body: Record<string, unknown> = isRowId(named) ? { action_version_id: named } : { action: named }
+    if (options.version && !isRowId(named)) body.version = options.version
+    if (options.customCode) body.custom_code = options.customCode
+    body.inputData = inputData ?? {}
+    return this.run<T>(scriptId, body)
+  }
+
+  /**
+   * Runs your own JavaScript where an action of the app would run, with the user's connection: for
+   * an API the app's actions do not cover. In the code, `context.inputData` is `inputData`,
+   * `context.authData` the credentials, and `axios` and `fetch` attach them to calls to the app's
+   * own domains; `return` what the caller should get. Name an `action` in `options` and its helper
+   * functions are in scope too.
+   */
+  async runCode<T = unknown>(scriptId: string, code: string, inputData: Record<string, unknown> = {}, options: RunCodeOptions = {}): Promise<T> {
+    const body: Record<string, unknown> = { custom_code: required('code', code), inputData: inputData ?? {} }
+    if (options.action) body[isRowId(options.action) ? 'action_version_id' : 'action'] = options.action
+    if (options.version && options.action && !isRowId(options.action)) body.version = options.version
+    return this.run<T>(scriptId, body)
+  }
+
+  private async run<T>(scriptId: string, body: Record<string, unknown>): Promise<T> {
     const payload = await request<T>({
       method: 'POST',
       url: `${this.runBaseUrl}/func/${required('scriptId', scriptId)}`,
-      body: JSON.stringify({ action_version_id: required('actionVersionId', actionVersionId), inputData: inputData ?? {} }),
+      body: JSON.stringify(body),
       fetchImpl: this.transport
     })
     return payload.data
@@ -369,18 +420,17 @@ export class ViaSocket {
   }
 
   private async resolveSlug(slug: string): Promise<string> {
-    let data: { data?: { plugins?: Record<string, { rowid?: string }> } } | undefined
+    let serviceId: string | undefined
     try {
-      ;({ data } = await request<{ data?: { plugins?: Record<string, { rowid?: string }> } }>({
+      const { data } = await request<{ service?: { service_id?: string } }>({
         method: 'GET',
-        url: `${CATALOG.slug}?service=${encodeURIComponent(slug)}`,
-        fetchImpl: this.transport,
-        signal: AbortSignal.timeout(SLUG_TIMEOUT_MS)
-      }))
+        url: `${CATALOG.plugins}/${encodeURIComponent(slug)}`,
+        fetchImpl: this.transport
+      })
+      serviceId = data?.service?.service_id
     } catch (error) {
-      if ((error as Error)?.name !== 'TimeoutError') throw error
+      if (!(error instanceof ViaSocketError && error.status === 404)) throw error
     }
-    const serviceId = data?.data?.plugins?.[slug]?.rowid
     if (!serviceId) {
       throw new ViaSocketError(`No viaSocket app has the slug "${slug}" — slugs are exact and case-sensitive; find it with catalog.list()`, {
         status: null
@@ -441,49 +491,161 @@ export class UserScope {
   }
 
   /**
-   * Turns a connection into a script_id you can run actions with. Needed only for actions —
-   * subscribing to a trigger takes the auth_id alone. Do it once per connection; see
-   * `findEnabled()` before calling it again.
+   * The actions and triggers of an app, by its slug (`'gmail'`), with the names the other calls
+   * take: each one's `key`, its published `version` and every version that can be named. Read it
+   * at run time, never copy keys from a page into code without it. Cached 10 minutes per app,
+   * for every user. An unknown slug is a `ViaSocketError` with status 404.
    */
-  async enable(serviceId: string, authId: string): Promise<EnableResult> {
-    const { data } = await this.call<{ script_id: string; webhook_url: string; service_id: string; auth_id: string }>(
-      'POST',
-      `/embed/enable/${required('serviceId', serviceId)}/${required('authId', authId)}`,
-      ''
-    )
-    return { scriptId: data.script_id, webhookUrl: data.webhook_url, serviceId: data.service_id, authId: data.auth_id }
+  async listActions(app: string, params: ListActionsParams = {}): Promise<AppActions> {
+    const slug = required('app', app)
+    const all = await this.cachedActions(slug)
+    return params.type ? { ...all, actions: all.actions.filter((action) => action.type === params.type) } : all
   }
 
   /**
-   * The values one field accepts, scoped by what the user has already chosen.
-   *
-   * Handles both response shapes the endpoint uses — a plain array, or `{ data, offset }` on
-   * fields that paginate — so the caller always gets `{ options, offset }`.
+   * The `service_id` of an app, by its slug: what the connect popup takes. Read from viaSocket
+   * itself (the app's listing), so it knows every app; cached for the life of the process.
    */
-  async listOptions(actionVersionId: string, params: ListOptionsParams): Promise<ListOptionsResult> {
+  async serviceIdFor(app: string): Promise<string> {
+    return (await this.cachedActions(required('app', app))).serviceId
+  }
+
+  private cachedActions(slug: string): Promise<AppActions> {
+    const cached = this.client.appsCache.get(slug)
+    if (cached && Date.now() - cached.at < APPS_TTL_MS) return cached.value
+    const value = this.readActions(slug)
+    this.client.appsCache.set(slug, { at: Date.now(), value })
+    value.catch(() => this.client.appsCache.delete(slug))
+    return value
+  }
+
+  private async readActions(slug: string): Promise<AppActions> {
+    const { data } = await this.call<{
+      service: string
+      service_id: string
+      actions?: Array<{
+        key: string
+        name: string
+        type: 'action' | 'trigger'
+        description?: string
+        action_id: string
+        version?: string | null
+        action_version_id?: string | null
+        versions?: Array<{ version: string; action_version_id: string; status: string }>
+      }>
+    }>('GET', `/embed/services/${encodeURIComponent(slug)}/actions`)
+    const actions: AppAction[] = (data.actions ?? []).map((action) => ({
+      key: action.key,
+      name: action.name,
+      type: action.type,
+      description: action.description ?? '',
+      actionId: action.action_id,
+      version: action.version ?? null,
+      actionVersionId: action.action_version_id ?? null,
+      versions: (action.versions ?? []).map((row) => ({ version: row.version, actionVersionId: row.action_version_id, status: row.status }))
+    }))
+    return { app: data.service || slug, serviceId: data.service_id, actions }
+  }
+
+  /**
+   * Turns a connection into a script_id you can run actions with: `app` is the app's slug
+   * (`'gmail'`), `authId` one of the user's connections to it (`'NoAuth'` for an app without
+   * sign-in). Needed only for actions — subscribing to a trigger takes the auth_id alone. Do it
+   * once per connection; see `findEnabled()` before calling it again.
+   *
+   * A `service_id` is still taken in place of the slug; the flow it makes then takes only
+   * `action_version_id`s, not keys.
+   */
+  async enable(app: string, authId: string): Promise<EnableResult> {
+    const named = required('app', app)
+    const path = isRowId(named)
+      ? `/embed/enable/${named}/${required('authId', authId)}`
+      : `/embed/services/${encodeURIComponent(named)}/enable/${required('authId', authId)}`
+    const { data } = await this.call<{ script_id: string; webhook_url: string; service?: string; service_id: string; auth_id: string }>('POST', path, '')
+    return {
+      scriptId: data.script_id,
+      webhookUrl: data.webhook_url,
+      serviceId: data.service_id,
+      authId: data.auth_id,
+      ...(data.service ? { app: data.service } : {})
+    }
+  }
+
+  /**
+   * The values one field accepts, read from the user's own account: `app` by its slug, `action` by
+   * its key, and in `params` the `fieldKey`, the `authId`, what is chosen so far, and `search` and
+   * `paginate` for a field that searches or pages. Call it when the field is rendered and again
+   * whenever a field it depends on changes.
+   *
+   * The id-based form, `listOptions(actionVersionId, params)`, still works for code written
+   * against it; it cannot search or page.
+   */
+  listOptions(app: string, action: string, params: ListOptionsParams): Promise<ListOptionsResult>
+  /** @deprecated Name the app and the action: `listOptions(app, actionKey, params)`. */
+  listOptions(actionVersionId: string, params: ListOptionsParams): Promise<ListOptionsResult>
+  async listOptions(first: string, second: string | ListOptionsParams, third?: ListOptionsParams): Promise<ListOptionsResult> {
+    if (typeof second !== 'string') return this.listOptionsById(first, second)
+    const params = third ?? ({} as ListOptionsParams)
+    const body: Record<string, unknown> = {
+      auth_id: required('authId', params.authId),
+      fieldKey: required('fieldKey', params.fieldKey),
+      existingFields: params.existingFields ?? {}
+    }
+    if (params.version) body.version = params.version
+    if (params.search) body.search = params.search
+    if (params.paginate !== undefined && params.paginate !== null) body.paginate = params.paginate
+    if (params.customCode) body.custom_code = params.customCode
+    const { data } = await this.call<{ options?: Option[]; paginate?: unknown; has_more?: boolean; message?: string }>(
+      'POST',
+      `/embed/services/${encodeURIComponent(required('app', first))}/actions/${encodeURIComponent(required('action', second))}/options`,
+      body
+    )
+    const paginate = data?.paginate ?? null
+    return {
+      options: Array.isArray(data?.options) ? data.options : [],
+      paginate,
+      hasMore: Boolean(data?.has_more),
+      ...(data?.message ? { message: data.message } : {}),
+      offset: paginate === null ? null : String(paginate)
+    }
+  }
+
+  /** The id-based route: a plain array, or `{ data, offset }` on fields that paginate; the search text travels inside `existingFields`. */
+  private async listOptionsById(actionVersionId: string, params: ListOptionsParams): Promise<ListOptionsResult> {
+    const existingFields = { ...(params?.existingFields ?? {}) }
+    if (params?.search) existingFields._searchText = params.search
     const { data } = await this.call<
       Option[] | { data?: Option[]; offset?: string | null; response?: { status?: number | string; data?: { message?: string } } }
     >('POST', `/embed/list-options/${required('actionVersionId', actionVersionId)}`, {
       fieldKey: required('fieldKey', params?.fieldKey),
       auth_id: required('authId', params?.authId),
-      existingFields: params?.existingFields ?? {}
+      existingFields
     })
-    if (Array.isArray(data)) return { options: data, offset: null }
+    if (Array.isArray(data)) return { options: data, paginate: null, hasMore: false, offset: null }
     // A connection that cannot be read (revoked, or another user's auth_id) is answered with 200 and
     // success: true, the failure nested in data. It is an error, and the message is the explanation.
     if (data?.response && Number(data.response.status) >= 400) {
       throw new ViaSocketError(data.response.data?.message || 'list-options failed', { status: Number(data.response.status), body: data })
     }
-    return { options: Array.isArray(data?.data) ? data.data : [], offset: data?.offset ?? null }
+    const offset = data?.offset ?? null
+    return { options: Array.isArray(data?.data) ? data.data : [], paginate: offset, hasMore: Boolean(offset), offset }
   }
 
   /**
-   * Subscribes to an app event with a handler: `code`, a self-contained script we run on our
-   * servers each time the event fires, with the event at `context.req.body`. It runs an action in
-   * another app the user connected, or calls your own API. `webhook` (a public URL we POST raw
+   * Subscribes to an app event with a handler: `app` by its slug, `trigger` by its key, and in
+   * `params` the `authId`, the trigger's `inputData` and `code`, a self-contained script we run on
+   * our servers each time the event fires, with the event at `context.req.body`. It runs an action
+   * in another app the user connected, or calls your own API. `webhook` (a public URL we POST raw
    * events to) is the edge case. Exactly one of the two.
+   *
+   * The id-based form, `subscribe(triggerVersionId, params)`, still works for code written against it.
    */
-  async subscribe(triggerVersionId: string, params: SubscribeParams): Promise<SubscribeResult> {
+  subscribe(app: string, trigger: string, params: SubscribeParams): Promise<SubscribeResult>
+  /** @deprecated Name the app and the trigger: `subscribe(app, triggerKey, params)`. */
+  subscribe(triggerVersionId: string, params: SubscribeParams): Promise<SubscribeResult>
+  async subscribe(first: string, second: string | SubscribeParams, third?: SubscribeParams): Promise<SubscribeResult> {
+    const byKey = typeof second === 'string'
+    const params = (byKey ? third : second) ?? ({} as SubscribeParams)
     if (!params?.webhook === !params?.code) {
       throw new ViaSocketError('subscribe: pass exactly one of `code` (a handler we run per event) or `webhook`', { status: null })
     }
@@ -494,14 +656,19 @@ export class UserScope {
     }
     if (params.webhook) body.webhook = params.webhook
     if (params.code) body.code = params.code
+    if (byKey && params.version) body.version = params.version
+    if (params.description) body.description = params.description
 
+    const path = byKey
+      ? `/embed/services/${encodeURIComponent(required('app', first))}/triggers/${encodeURIComponent(required('trigger', second))}/subscribe`
+      : `/embed/subscribe-event/${required('triggerVersionId', first)}`
     const { data } = await this.call<{
       script_id: string
       title: string
       auth_id: string
       inputData: Record<string, unknown> & { hookUrl?: string }
       meta: Record<string, unknown>
-    }>('POST', `/embed/subscribe-event/${required('triggerVersionId', triggerVersionId)}`, body)
+    }>('POST', path, body)
 
     return {
       scriptId: data.script_id,
@@ -549,13 +716,14 @@ export class UserScope {
   }
 
   /**
-   * The script_id of an app this user already enabled — active or paused — or null. Call it before
-   * `enable()`: enabling twice leaves you with two script_ids for one app. A paused one is resumed
-   * with `enableFlow()`, never enabled again.
+   * The script_id of an app this user already enabled — active or paused — or null; `app` is the
+   * app's slug (or its `service_id`). Call it before `enable()`: enabling twice leaves you with two
+   * script_ids for one app. A paused one is resumed with `enableFlow()`, never enabled again.
    */
-  async findEnabled(serviceId: string): Promise<string | null> {
+  async findEnabled(app: string): Promise<string | null> {
+    const named = required('app', app)
+    const wanted = isRowId(named) ? named : await this.serviceIdFor(named)
     const flows = await this.listFlows()
-    const wanted = required('serviceId', serviceId)
     return flows.find((flow) => flow.serviceId === wanted && (flow.status === 'active' || flow.status === 'paused'))?.id ?? null
   }
 

@@ -10,8 +10,8 @@ const CATALOG = {
     {
       name: 'Send Message',
       description: 'Send a message.',
-      action_id: 'act1',
-      action_version_id: 'ver1',
+      action_id: 'rowact1',
+      action_version_id: 'rowver1',
       input_schema: {
         steps: { root: ['channel', 'text'] },
         blocks: {
@@ -29,9 +29,9 @@ function fakeFetch({ flows = [] } = {}) {
   const fetchImpl = async (url, init = {}) => {
     url = String(url)
     calls.push({ url, method: init.method ?? 'GET', body: init.body })
-    const reply = url.includes('recommend/services')
-      ? { data: { plugins: { slack: { rowid: 'rowbu58rc' } } } }
-      : url.endsWith('/func/scriK4LFg2kc')
+    const reply = url.includes('/embed/services/slack/actions')
+      ? { success: true, data: { service: 'slack', service_id: 'rowbu58rc', actions: [{ key: 'Send_Message', name: 'Send Message', type: 'action', action_id: 'rowact1', version: 'V1', action_version_id: 'rowver1', versions: [] }] } }
+      : url.endsWith('/api/v1/plugins/rowbu58rc/actions')
         ? CATALOG
         : url.includes('/integrations')
           ? { success: true, data: { flows } }
@@ -60,7 +60,7 @@ test('viasocketTools (AI SDK): execute runs the action on the script the user en
   const input = { channel: 'C1', text: 'hi' }
   assert.equal(await tools['slack_send-message'].execute(input, { toolCallId: '1', messages: [] }), '{"ok":true}')
   const run = calls.find((call) => call.url.endsWith('/func/scriSLACK'))
-  assert.deepEqual(JSON.parse(run.body), { action_version_id: 'ver1', inputData: input })
+  assert.deepEqual(JSON.parse(run.body), { action_version_id: 'rowver1', inputData: input })
 })
 
 test('viasocketTools (AI SDK): an app the user has not connected is a sentence for the model', async () => {
@@ -97,5 +97,5 @@ test('viasocketTools (AI SDK): generateText calls the tool and the action runs f
   assert.equal(result.text, 'Posted.')
   assert.equal(result.steps[0].toolResults[0].output, '{"ok":true}')
   const run = calls.find((call) => call.url.endsWith('/func/scriSLACK'))
-  assert.deepEqual(JSON.parse(run.body), { action_version_id: 'ver1', inputData: { channel: 'C1', text: 'hi' } })
+  assert.deepEqual(JSON.parse(run.body), { action_version_id: 'rowver1', inputData: { channel: 'C1', text: 'hi' } })
 })

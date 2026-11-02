@@ -111,17 +111,45 @@ Each tool hands the model the action's JSON Schema as its declaration and runs t
   an app they have not connected answers the model "Slack is not connected for this user", so the agent
   can ask them to; it starts working on the next call after they do.
 - **Pick the actions.** An app left out of `actions` gives every published action as a tool — fine for a
-  small app, too many for a large one (Notion has 57). Actions are named by `action_id` or by their path
-  on the app's page (`send-message`).
+  small app, too many for a large one (Notion has 57). Actions are named by their key (`Send_Message`,
+  any case), by `action_id`, or by their path on the app's page (`send-message`).
 - **Tool names** are `<app>_<action>` (`slack_send-message`); the input schema is built from the action's
   form, so the model sees the same fields, choices and help text a person would.
 - **Fields that hold an id** (a channel, a spreadsheet) come from the user's own account. Each app with
-  such a field also gets a `<app>_list-options` tool, which lists the real values on the user's connection.
+  such a field also gets a `<app>_list-options` tool, which lists the real values on the user's connection,
+  narrows a long list with `search` and pages it with `paginate` when it answers `"more": true`.
 - An error from the app comes back to the model as text, not as an exception, so one bad call does not
   end the run.
 
 The same tools without a framework — a name, a description, a JSON Schema and `invoke` — are
 `viasocket.agent_tools(viasocket, user, apps, actions)`.
+
+## Calls without a framework
+
+The client underneath names things the way the catalog does: the app by its slug, an action or trigger by
+its key, a version by its number. `user` is the unique identifier the user connected their apps under.
+
+```python
+listing = viasocket.list_actions("user_123", "slack")          # {"app", "service_id", "actions": [{"key", "name", "version", ...}]}
+
+# Once per user and app: the flow that runs its actions on their connection.
+script_id = viasocket.find_enabled("user_123", "slack")
+if not script_id:
+    script_id = viasocket.enable("user_123", "slack", auth_id="auth8f3a9c2d")["script_id"]
+
+# Run an action by key; pin a version when your code fills the input.
+viasocket.run_action(script_id, "Send_Message", {"text": "hi", "channel": "C1"}, version="v3")
+
+# The values a field accepts, with search and paging.
+page = viasocket.field_options("user_123", "slack", "Send_Message", "channel", "auth8f3a9c2d", search="gen")
+while page["has_more"]:
+    page = viasocket.field_options("user_123", "slack", "Send_Message", "channel", "auth8f3a9c2d", search="gen", paginate=page["paginate"])
+
+# Your webhook (or `code=` JavaScript) on every event of a trigger.
+viasocket.subscribe("user_123", "slack", "New_Message", auth_id="auth8f3a9c2d", webhook="https://example.com/hooks/slack")
+```
+
+The `script_id` is the credential for `run_action` and `run_code`: keep it on your server.
 
 ## License
 

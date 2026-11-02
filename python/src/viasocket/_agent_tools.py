@@ -124,11 +124,38 @@ def _clip(text: str) -> str:
     return f"{text[:MAX_RESULT]}… (truncated)" if len(text) > MAX_RESULT else text
 
 
+def _published_actions(viasocket: ViaSocket, user: str, slug: str) -> "tuple[str, str, List[dict]]":
+    """
+    The app's actions with everything a tool needs: the key and version id from viaSocket's own
+    listing, the name, description and `input_schema` from the public catalog, joined by `action_id`.
+    """
+    listing = viasocket.list_actions(user, slug)
+    service_id = listing["service_id"]
+    app = viasocket.versions(service_id) if service_id else None
+    if not app:
+        raise ViaSocketError(f'agent_tools: "{slug}" has nothing published')
+    listed = {entry.get("action_id"): entry for entry in listing["actions"] if entry.get("type") != "trigger"}
+    merged = []
+    for action in app["actions"]:
+        entry = listed.get(action.get("action_id")) or {}
+        merged.append({**action, "key": entry.get("key"), "action_version_id": entry.get("action_version_id") or action.get("action_version_id")})
+    return service_id, app["service"]["name"], merged
+
+
+def _matches(action: dict, event: str) -> bool:
+    """An action is named by its key (`Send_Message`, any case), its `action_id`, or its path (`send-message`)."""
+    return (
+        (action.get("key") or "").lower() == event.lower()
+        or action.get("action_id") == event
+        or _event_path(action.get("name", "")) == event
+    )
+
+
 def agent_tools(viasocket: ViaSocket, user: str, apps: List[str], actions: Optional[Dict[str, List[str]]] = None) -> List[AgentTool]:
     """
     One tool per chosen action of each app, for one end user (`user`, the unique identifier their
     connections were made under). An app left out of `actions` gets every published action. Reads the
-    public catalog only; the user's connection is looked up when a tool first runs.
+    catalog only; the user's connection is looked up when a tool first runs.
     """
     taken: set = set()
 
@@ -142,21 +169,17 @@ def agent_tools(viasocket: ViaSocket, user: str, apps: List[str], actions: Optio
 
     tools: List[AgentTool] = []
     for slug in apps or []:
-        service_id = viasocket.service_id_for(slug)
-        app = viasocket.versions(service_id)
-        if not app:
-            raise ViaSocketError(f'agent_tools: "{slug}" has nothing published')
-        app_name = app["service"]["name"]
+        service_id, app_name, published = _published_actions(viasocket, user, slug)
         wanted = (actions or {}).get(slug)
         if wanted:
             chosen = []
             for event in wanted:
-                match = next((a for a in app["actions"] if a.get("action_id") == event or _event_path(a.get("name", "")) == event), None)
+                match = next((a for a in published if _matches(a, event)), None)
                 if not match:
                     raise ViaSocketError(f'agent_tools: {app_name} has no published action "{event}"')
                 chosen.append(match)
         else:
-            chosen = app["actions"]
+            chosen = published
         tools.extend(_app_tools(viasocket, user, slug, service_id, app_name, chosen, unique_name, taken))
     return tools
 
@@ -224,12 +247,25 @@ def _app_tools(viasocket, user, slug, service_id, app_name, chosen, unique_name,
             if not flow:
                 return not_connected
             chosen_so_far = input.get("chosen") if isinstance(input.get("chosen"), dict) else {}
-            existing = {**chosen_so_far, "_searchText": str(input["search"])} if input.get("search") else chosen_so_far
-            result = viasocket.list_options(user, action["action_version_id"], str(input.get("field", "")), flow["auth_id"], existing)
+            search = str(input["search"]) if input.get("search") else None
+            field = str(input.get("field", ""))
+            if action.get("key"):
+                result = viasocket.field_options(
+                    user, slug, action["key"], field, flow["auth_id"], existing_fields=chosen_so_far, search=search, paginate=input.get("paginate")
+                )
+                more, next_page, note = result["has_more"], result["paginate"], result["message"]
+            else:
+                # An action viaSocket's listing does not name: the older route, which searches through a field.
+                existing = {**chosen_so_far, "_searchText": search} if search else chosen_so_far
+                result = viasocket.list_options(user, action["action_version_id"], field, flow["auth_id"], existing)
+                more, next_page, note = bool(result["offset"]), None, None
             if not result["options"]:
-                return 'No values. If this field depends on another, put that one in "chosen" first, or try other search words.'
+                return f"No values. {note}" if note else 'No values. If this field depends on another, put that one in "chosen" first, or try other search words.'
             values = [{"label": o.get("label"), "value": o.get("value")} for o in result["options"]]
-            return _clip(json.dumps({"options": values, "more": bool(result["offset"])}))
+            answer: Dict[str, Any] = {"options": values, "more": more}
+            if more and next_page is not None:
+                answer["paginate"] = next_page
+            return _clip(json.dumps(answer))
         except ViaSocketError as error:
             return f"{app_name}: listing values failed: {error}"
 
@@ -239,7 +275,7 @@ def _app_tools(viasocket, user, slug, service_id, app_name, chosen, unique_name,
             description=(
                 f"{app_name}: lists the values a field of another {app_name} tool accepts (a channel, a sheet, a list), "
                 f"read from the user's own {app_name} account. Call it before filling a field whose description names "
-                "this tool; send the value, show the label."
+                'this tool; send the value, show the label. A long list is searched with "search" and paged with "paginate".'
             ),
             parameters={
                 "type": "object",
@@ -254,6 +290,12 @@ def _app_tools(viasocket, user, slug, service_id, app_name, chosen, unique_name,
                         ),
                     },
                     "search": {"type": "string", "description": "Words to narrow a long list, such as part of a channel name."},
+                    "paginate": {
+                        "description": (
+                            'The "paginate" value from this tool\'s previous answer, sent back with the same "search" and '
+                            '"chosen", to get the next page when that answer said "more".'
+                        )
+                    },
                 },
                 "required": ["tool", "field"],
             },

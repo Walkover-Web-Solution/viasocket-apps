@@ -53,10 +53,16 @@ export async function request<T = unknown>(options: RequestOptions): Promise<Env
   const isEnvelope = shaped !== null && typeof shaped.success === 'boolean' && ('data' in shaped || shaped.success === false)
   const envelope = isEnvelope ? (payload as Envelope<T> & { error?: { message?: string } }) : null
   if (!response.ok || envelope?.success === false) {
-    const raw = payload && typeof payload === 'object' ? (payload as { message?: string; error?: { message?: string } }) : null
+    const raw =
+      payload && typeof payload === 'object'
+        ? (payload as { message?: string; error?: { message?: string }; errorMsg?: { message?: string } | string })
+        : null
+    // A failed action answers `{ success: false, errorMsg: { status, message, data } }`: the app's own message.
+    const errorMsg = typeof raw?.errorMsg === 'string' ? raw.errorMsg : raw?.errorMsg?.message
     const message =
       envelope?.message ||
       envelope?.error?.message ||
+      errorMsg ||
       raw?.message ||
       raw?.error?.message ||
       `viaSocket responded ${response.status} for ${options.method} ${options.url}`

@@ -32,20 +32,88 @@ export interface Option {
 
 export interface ListOptionsResult {
   options: Option[]
-  /** Cursor for the next page on fields that paginate; null when there is no more. */
+  /**
+   * What to send back as `paginate` to get the next page; null when there is no more. Opaque: a
+   * page number for one app, a cursor for another.
+   */
+  paginate: unknown
+  hasMore: boolean
+  /** A note the field returned with its list, for the user to see: why it is empty, what to choose first. */
+  message?: string
+  /** @deprecated The same as `paginate`, as the id-based route named it. */
   offset: string | null
 }
 
 export interface ListOptionsParams {
-  /** The field you want choices for, exactly as it appears in the action's inputData. */
+  /** The field you want choices for, as its full dotted path in the action's inputData (`destination.channel_id`). */
   fieldKey: string
-  /** The connection to read through. */
+  /** The connection to read through; `'NoAuth'` for an app without sign-in. */
   authId: string
   /**
-   * Everything the user has already chosen. Fields this one depends on must be present, or
-   * the list comes back empty.
+   * Everything the user has already chosen, nested as inputData is. Fields this one depends on
+   * must be present, or the list comes back empty.
    */
   existingFields?: Record<string, unknown>
+  /** Which version of the action: `'v55'`. The published one when left out. Only with an app and an action key. */
+  version?: string
+  /**
+   * What the user typed in the box, debounced. A field that supports search filters by it, the
+   * others ignore it; a new text starts a new list, without `paginate`.
+   */
+  search?: string
+  /** The `paginate` value the previous page answered with, to get the next page; same `search` and `existingFields`. */
+  paginate?: unknown
+  /**
+   * JavaScript that lists the options instead of the field's own code, for a list the field does
+   * not offer. In scope: `__searchText` (the search text) and `context.paginateData[fieldKey]`.
+   */
+  customCode?: string
+}
+
+/** One action or trigger of an app, as `user.listActions` returns it: the names the calls take. */
+export interface AppAction {
+  /** What `runAction`, `listOptions` and `subscribe` name the action or trigger by: `Send_Email`. */
+  key: string
+  name: string
+  type: 'action' | 'trigger'
+  description: string
+  /** The plain `action_id` / `trigger_id`: what `connect`'s `actions`, `sampleEvent`, automations and the prebuilt UI take. */
+  actionId: string
+  /** The published version's name (`V55`): what runs when a call names no version. Null when nothing is published. */
+  version: string | null
+  /** The published version's id, for the id-based routes. */
+  actionVersionId: string | null
+  /** Every version that can be named, newest first. */
+  versions: Array<{ version: string; actionVersionId: string; status: string }>
+}
+
+export interface AppActions {
+  /** The app's slug. */
+  app: string
+  /** The `service_id` the connect popup and `findEnabled` take. */
+  serviceId: string
+  actions: AppAction[]
+}
+
+export interface ListActionsParams {
+  /** Only actions, or only triggers. Both when left out. */
+  type?: 'action' | 'trigger'
+}
+
+export interface RunActionOptions {
+  /** Which version of the action: `'v55'`. The published one when left out. Pin it when your code fills the inputData. */
+  version?: string
+  /**
+   * JavaScript to run instead of the action's own code, with the action's helper functions in
+   * scope and the connection's credentials attached to `axios` and `fetch`. See `runCode`.
+   */
+  customCode?: string
+}
+
+export interface RunCodeOptions {
+  /** An action whose helper functions the code may call. */
+  action?: string
+  version?: string
 }
 
 export interface EnableResult {
@@ -54,10 +122,17 @@ export interface EnableResult {
   webhookUrl: string
   serviceId: string
   authId: string
+  /** The app's slug, when it was enabled by it. */
+  app?: string
 }
 
 export interface SubscribeParams {
+  /** The connection to subscribe with; `'NoAuth'` for an app without sign-in. */
   authId: string
+  /** Which version of the trigger: `'v11'`. The published one when left out. Only with an app and a trigger key. */
+  version?: string
+  /** Shown with the subscription in the user's flow list. */
+  description?: string
   /**
    * The event's own configuration — which channel, which sheet. For polled triggers it may also
    * carry `scheduledTime`, the minutes between checks as a string: "5" or "15".
@@ -168,6 +243,8 @@ export interface CatalogService {
 }
 
 interface CatalogEventBase {
+  /** The key the readable routes name the event by (`Send_Email`), as `user.listActions` lists it. */
+  key?: string
   name: string
   description: string
   /**

@@ -2,6 +2,10 @@
 The part of the viaSocket Apps API an agent needs, with no dependencies: the public catalog, the
 signed embed token, a user's flows and field values, and running an action. Mirrors the calls of
 the `viasocket-apps` npm package, so both read the same responses the same way.
+
+Apps, actions and versions are named the way the catalog shows them: the app by its slug (`slack`),
+an action by its key (`Send_Message`), a version by its number (`v55`). The row ids the older
+routes took still work everywhere a key does.
 """
 
 from __future__ import annotations
@@ -10,6 +14,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -18,12 +23,12 @@ from typing import Any, Callable, Dict, List, Optional
 
 DEFAULT_API_BASE_URL = "https://flow-api.viasocket.com"
 DEFAULT_RUN_BASE_URL = "https://flow.sokt.io"
-CATALOG_VERSIONS = "https://flow.sokt.io/func/scriK4LFg2kc"
-CATALOG_SLUG = "https://plug-service.viasocket.com/api/v1/plugins/recommend/services"
-# An unknown slug is answered by nothing, slowly; a known one in well under a second.
-SLUG_TIMEOUT = 30
+# `/<slug or service_id>` is the app, `/<slug or service_id>/actions` the app with its published actions and triggers.
+CATALOG_PLUGINS = "https://plug-service.viasocket.com/api/v1/plugins"
 REQUEST_TIMEOUT = 120
 VERSIONS_TTL = 10 * 60
+# A row id (`rowbu58rc`), as opposed to a slug or an action key.
+ROW_ID = re.compile(r"^row[a-z0-9]+$")
 
 # (method, url, headers, body) -> (status, text). Swapped in tests; urllib otherwise.
 Transport = Callable[[str, str, Dict[str, str], Optional[bytes], float], "tuple[int, str]"]
@@ -94,6 +99,7 @@ class ViaSocket:
         self._transport = transport or _urllib_transport
         self._service_ids: Dict[str, str] = {}
         self._versions: Dict[str, "tuple[float, Optional[dict]]"] = {}
+        self._actions: Dict[str, "tuple[float, dict]"] = {}
 
     def _request(self, method: str, url: str, body: Any = None, token: Optional[str] = None, timeout: float = REQUEST_TIMEOUT) -> Any:
         """
@@ -118,10 +124,11 @@ class ViaSocket:
         )
         if not 200 <= status < 300 or (envelope is not None and envelope["success"] is False):
             raw = payload if isinstance(payload, dict) else {}
-            error = raw.get("error")
+            # A failed action run puts the app's own failure in `errorMsg`; other refusals in `error` or `message`.
+            nested = raw.get("errorMsg") if isinstance(raw.get("errorMsg"), dict) else raw.get("error")
             message = (
                 raw.get("message")
-                or (error.get("message") if isinstance(error, dict) else None)
+                or (nested.get("message") if isinstance(nested, dict) else None)
                 or f"viaSocket responded {status} for {method} {url}"
             )
             raise ViaSocketError(message, status=status, body=payload)
@@ -130,19 +137,21 @@ class ViaSocket:
     # The catalog: public, nothing per user.
 
     def service_id_for(self, slug: str) -> str:
-        """The `service_id` of the app with this slug (`slack`, `google-sheets`). Exact and case-sensitive."""
+        """
+        The `service_id` of the app with this slug (`slack`, `google-sheets`), from the plug-service
+        catalog. Exact and case-sensitive. Prefer `service_id_of`, which reads viaSocket itself:
+        plug-service does not know some slugs (`gmail` among them).
+        """
         key = _required("slug", slug)
         if key not in self._service_ids:
-            url = f"{CATALOG_SLUG}?service={urllib.parse.quote(key)}"
             try:
-                data = self._request("GET", url, timeout=SLUG_TIMEOUT)
+                data = self._request("GET", f"{CATALOG_PLUGINS}/{urllib.parse.quote(key)}")
             except ViaSocketError as error:
-                if "timed out" not in str(error):
+                if error.status != 404:
                     raise
                 data = None
-            inner = data.get("data") if isinstance(data, dict) else None
-            plugins = (inner.get("plugins") if isinstance(inner, dict) else None) or {}
-            service_id = (plugins.get(key) or {}).get("rowid")
+            service = data.get("service") if isinstance(data, dict) else None
+            service_id = (service or {}).get("service_id")
             if not service_id:
                 raise ViaSocketError(f'No viaSocket app has the slug "{key}" (slugs are exact and case-sensitive)')
             self._service_ids[key] = service_id
@@ -153,7 +162,12 @@ class ViaSocket:
         cached = self._versions.get(service_id)
         if cached and time.time() - cached[0] < VERSIONS_TTL:
             return cached[1]
-        data = self._request("POST", CATALOG_VERSIONS, {"service_id": _required("service_id", service_id)})
+        try:
+            data = self._request("GET", f"{CATALOG_PLUGINS}/{urllib.parse.quote(_required('service_id', service_id))}/actions")
+        except ViaSocketError as error:
+            if error.status == 404:  # an unknown app: nothing to list
+                return None
+            raise
         # No `success` key, so the body arrives whole; tolerate an envelope anyway.
         body = data if isinstance(data, dict) else {}
         if "service" not in body:
@@ -188,8 +202,138 @@ class ViaSocket:
             for flow in ((data or {}).get("flows") or [])
         ]
 
+    def list_actions(self, unique_identifier: str, app: str, type: Optional[str] = None) -> dict:
+        """
+        The app's actions and triggers as viaSocket names them: `{ app, service_id, actions }`, each
+        action with `key`, `name`, `type`, `description`, `action_id`, `version` (the published one),
+        `action_version_id` and `versions`. `type` narrows to `action` or `trigger`. Cached 10 minutes.
+        """
+        slug = _required("app", app)
+        cache_key = f"{slug}?{type or ''}"
+        cached = self._actions.get(cache_key)
+        if cached and time.time() - cached[0] < VERSIONS_TTL:
+            return cached[1]
+        url = f"{self.api_base_url}/embed/services/{urllib.parse.quote(slug)}/actions"
+        if type:
+            url += f"?type={urllib.parse.quote(type)}"
+        data = self._request("GET", url, token=self.token_for(unique_identifier)) or {}
+        listing = {
+            "app": slug,
+            "service_id": data.get("service_id"),
+            "actions": data.get("actions") if isinstance(data.get("actions"), list) else [],
+        }
+        self._actions[cache_key] = (time.time(), listing)
+        return listing
+
+    def service_id_of(self, unique_identifier: str, app: str) -> str:
+        """The `service_id` of the app with this slug, read from viaSocket. Cached with `list_actions`."""
+        service_id = self.list_actions(unique_identifier, app)["service_id"]
+        if not service_id:
+            raise ViaSocketError(f'No viaSocket app has the slug "{app}"')
+        return service_id
+
+    def enable(self, unique_identifier: str, app: str, auth_id: str) -> dict:
+        """
+        Enables the app for the user on this connection, so its actions run on `webhook_url`:
+        `{ script_id, webhook_url, service, service_id, auth_id }`. Once per user and app: check
+        `find_enabled` first. `app` is a slug, or a service id for the older route.
+        """
+        name = _required("app", app)
+        connection = _required("auth_id", auth_id)
+        if ROW_ID.match(name):
+            url = f"{self.api_base_url}/embed/enable/{name}/{connection}"
+        else:
+            url = f"{self.api_base_url}/embed/services/{urllib.parse.quote(name)}/enable/{connection}"
+        return self._request("POST", url, {}, token=self.token_for(unique_identifier)) or {}
+
+    def find_enabled(self, unique_identifier: str, app: str) -> Optional[str]:
+        """The script_id of the user's enabled flow for this app (active or paused), or None. `app` is a slug or a service id."""
+        name = _required("app", app)
+        service_id = name if ROW_ID.match(name) else self.service_id_of(unique_identifier, name)
+        return next(
+            (flow["id"] for flow in self.list_flows(unique_identifier) if flow["service_id"] == service_id and flow["status"] in ("active", "paused")),
+            None,
+        )
+
+    def field_options(
+        self,
+        unique_identifier: str,
+        app: str,
+        action: str,
+        field_key: str,
+        auth_id: str,
+        existing_fields: Optional[dict] = None,
+        version: Optional[str] = None,
+        search: Optional[str] = None,
+        paginate: Any = None,
+        custom_code: Optional[str] = None,
+    ) -> dict:
+        """
+        The values one field of an action accepts, read from the user's own account:
+        `{ options, paginate, has_more, message }`. Send `paginate` back, with the same `search` and
+        `existing_fields`, for the next page; a new `search` starts over without it.
+        """
+        body: Dict[str, Any] = {
+            "auth_id": _required("auth_id", auth_id),
+            "fieldKey": _required("field_key", field_key),
+            "existingFields": existing_fields or {},
+        }
+        for key, value in (("version", version), ("search", search), ("paginate", paginate), ("custom_code", custom_code)):
+            if value is not None:
+                body[key] = value
+        data = self._request(
+            "POST",
+            f"{self.api_base_url}/embed/services/{urllib.parse.quote(_required('app', app))}/actions/{urllib.parse.quote(_required('action', action))}/options",
+            body,
+            token=self.token_for(unique_identifier),
+        )
+        data = data if isinstance(data, dict) else {}
+        options = data.get("options")
+        return {
+            "options": options if isinstance(options, list) else [],
+            "paginate": data.get("paginate"),
+            "has_more": bool(data.get("has_more")),
+            "message": data.get("message"),
+        }
+
+    def subscribe(
+        self,
+        unique_identifier: str,
+        app: str,
+        trigger: str,
+        auth_id: Optional[str] = None,
+        input_data: Optional[dict] = None,
+        code: Optional[str] = None,
+        webhook: Optional[str] = None,
+        version: Optional[str] = None,
+        meta: Any = None,
+        description: Optional[str] = None,
+    ) -> dict:
+        """
+        Subscribes the user to a trigger: every event calls `webhook` or runs `code` (exactly one).
+        Answers `{ script_id, title, auth_id, inputData, meta }`; keep the script_id to pause or change it.
+        """
+        if bool(code) == bool(webhook):
+            raise ViaSocketError("subscribe: pass exactly one of `code` (JavaScript run per event) or `webhook`")
+        body: Dict[str, Any] = {"code": code} if code else {"webhook": webhook}
+        for key, value in (("auth_id", auth_id), ("inputData", input_data), ("version", version), ("meta", meta), ("description", description)):
+            if value is not None:
+                body[key] = value
+        return (
+            self._request(
+                "POST",
+                f"{self.api_base_url}/embed/services/{urllib.parse.quote(_required('app', app))}/triggers/{urllib.parse.quote(_required('trigger', trigger))}/subscribe",
+                body,
+                token=self.token_for(unique_identifier),
+            )
+            or {}
+        )
+
     def list_options(self, unique_identifier: str, action_version_id: str, field_key: str, auth_id: str, existing_fields: Optional[dict] = None) -> dict:
-        """The values one field accepts, read from the user's own account: `{ options, offset }`."""
+        """
+        Deprecated: use `field_options`, which names the action by key and searches and pages.
+        The values one field accepts, read from the user's own account: `{ options, offset }`.
+        """
         data = self._request(
             "POST",
             f"{self.api_base_url}/embed/list-options/{_required('action_version_id', action_version_id)}",
@@ -205,10 +349,28 @@ class ViaSocket:
         options = (data or {}).get("data") if isinstance(data, dict) else None
         return {"options": options if isinstance(options, list) else [], "offset": (data or {}).get("offset")}
 
-    def run_action(self, script_id: str, action_version_id: str, input_data: Optional[dict] = None) -> Any:
-        """Runs one action. The script_id from the user's enabled flow is the credential: server only."""
-        return self._request(
-            "POST",
-            f"{self.run_base_url}/func/{_required('script_id', script_id)}",
-            {"action_version_id": _required("action_version_id", action_version_id), "inputData": input_data or {}},
-        )
+    def run_action(self, script_id: str, action: str, input_data: Optional[dict] = None, version: Optional[str] = None) -> Any:
+        """
+        Runs one action on the user's enabled flow and answers what the app returned. `action` is its
+        key (`Send_Message`; `version` picks a version, the published one when left out) or a version's
+        row id. The script_id is the credential: server only.
+        """
+        name = _required("action", action)
+        body: Dict[str, Any] = {"action_version_id": name} if ROW_ID.match(name) else {"action": name}
+        if version is not None and "action" in body:
+            body["version"] = version
+        body["inputData"] = input_data or {}
+        return self._request("POST", f"{self.run_base_url}/func/{_required('script_id', script_id)}", body)
+
+    def run_code(self, script_id: str, code: str, input_data: Optional[dict] = None, action: Optional[str] = None, version: Optional[str] = None) -> Any:
+        """
+        Runs your JavaScript with the user's connection, where an action would run: `context.inputData`,
+        `context.authData`, and `axios`/`fetch` that carry the credentials. Name an `action` and the
+        code can call that action's helpers.
+        """
+        body: Dict[str, Any] = {"custom_code": _required("code", code), "inputData": input_data or {}}
+        if action is not None:
+            body["action"] = action
+        if version is not None:
+            body["version"] = version
+        return self._request("POST", f"{self.run_base_url}/func/{_required('script_id', script_id)}", body)

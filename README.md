@@ -59,10 +59,10 @@ curl -fsSL https://flow.viasocket.com/viasocket-check.mjs -o viasocket-check.mjs
 node viasocket-check.mjs src
 ```
 
-It finds every viaSocket id and URL in your code and says whether each names a real app, action or
-trigger, is used where its call expects that kind of id (the two ids of an action look alike), and
-whether any viasocket URL was built by hand. No dependencies; exits 1 on a failure, so it can be a
-test. It reads no `.env` file and prints no line of code.
+It finds every viaSocket slug, key, id and URL in your code and says whether each names a real app, action
+or trigger (keys are case-sensitive), is used where its call expects it, and whether any viasocket URL was
+built by hand. No dependencies; exits 1 on a failure, so it can be a test. It reads no `.env` file and prints
+no line of code.
 
 ### Set up from the command line
 
@@ -140,42 +140,47 @@ const viasocket = new ViaSocket({
 // Everything is done for one of your end users, identified by an id you choose.
 const user = viasocket.user('user_123')
 
-// 1. Your frontend needs a token to open the connect popup.
+// 1. Your frontend needs a token to open the connect popup, and the app's service_id.
 const embedToken = await user.token()
+const serviceId = await user.serviceIdFor('google-sheets')
 
-// The app by its slug, and the event by its action_id and the version your code was written for —
-// both read from the live catalog, never copied ids. Each event's page lists them:
-// https://flow.viasocket.com/documentation/google-sheets.md
-const serviceId = await viasocket.catalog.serviceIdFor('google-sheets')
-const actionVersionId = await viasocket.catalog.versionIdFor(serviceId, '<action_id>', '<version>')
+// The app is named by its slug and each action or trigger by its key, as the app's page lists them
+// (https://flow.viasocket.com/documentation/google-sheets.md) and as listActions returns them. Pin
+// the version your code fills the inputData for; a newer version may change the fields.
+const { actions } = await user.listActions('google-sheets') // [{ key, name, type, version, versions, … }]
 
 // 2. After the popup posts back an auth_id: enable the app, once, to run actions. A paused app is
 //    found too, and resumed with enableFlow rather than enabled twice.
-const scriptId = (await user.findEnabled(serviceId)) ?? (await user.enable(serviceId, authId)).scriptId
+const scriptId = (await user.findEnabled('google-sheets')) ?? (await user.enable('google-sheets', authId)).scriptId
 
-// 3. Fill a dropdown with the user's real data.
-const { options } = await user.listOptions(actionVersionId, {
+// 3. Fill a dropdown with the user's real data. `search` is what they typed; `paginate` gets the next page.
+const { options, hasMore, paginate } = await user.listOptions('google-sheets', 'Add_Row', {
   fieldKey: 'spreadsheet_Id',
   authId,
-  existingFields: {}
+  existingFields: {},
+  search: 'sales'
 })
 
 // 4. Run an action. No token — the script_id is the credential.
-const result = await viasocket.runAction(scriptId, actionVersionId, {
-  spreadsheet_Id: options[0].value,
-  grid_Id: '0',
-  column_key: true
-})
+const result = await viasocket.runAction(
+  scriptId,
+  'Add_Row',
+  { spreadsheet_Id: options[0].value, grid_Id: '0', column_key: true },
+  { version: 'v12' }
+)
 
 // 5. Or subscribe to an event. Needs only the connection, not enable(). `code` is a handler we
 //    run on our servers when the event fires — see "Events" below. Save the scriptId it returns
 //    together with the inputData and handler you sent: the flows list never returns those.
-const subscription = await user.subscribe(triggerVersionId, {
+const subscription = await user.subscribe('slack', 'New_Message', {
   authId,
   inputData: { channel_id: ['C08SXCV3J85'] },
   code: handler,
   meta: { user_id: 'user_123' }
 })
+
+// 6. Your own code with the user's connection, for an API the app's actions do not cover.
+const profile = await viasocket.runCode(scriptId, 'const r = await axios.get("https://gmail.googleapis.com/gmail/v1/users/me/profile"); return r.data')
 ```
 
 ## Browser
@@ -183,9 +188,10 @@ const subscription = await user.subscribe(triggerVersionId, {
 ```js
 import { connect } from 'viasocket-apps/browser'
 
-// embedToken comes from your backend (user.token()), signed for the signed-in user.
-// actions (optional): the action_ids and trigger_ids you use — the popup then asks only
-// for their scopes; skipActionSelection goes straight to the app's consent screen.
+// embedToken and serviceId come from your backend: user.token(), signed for the signed-in user,
+// and user.serviceIdFor('slack'). actions (optional): the action_ids and trigger_ids you use
+// (actionId in listActions) — the popup then asks only for their scopes; skipActionSelection
+// goes straight to the app's consent screen.
 const { authId } = await connect({ embedToken, serviceId: 'rowbu58rc', actions: ['<action_id>'], skipActionSelection: true })
 // Send authId to your backend, which enables the app and stores the script_id.
 
@@ -295,13 +301,14 @@ await agent.invoke({ messages: [{ role: 'user', content: 'Post our Q3 numbers in
   app they have not connected answers the model "Slack is not connected for this user", so the agent
   can ask them to; it starts working on the next call after they do.
 - **Pick the actions.** An app left out of `actions` gives every published action as a tool — fine for
-  a small app, too many for a large one (Notion has 57). Actions are named by `action_id` or by their
-  path on the app's page (`send-message`).
+  a small app, too many for a large one (Notion has 57). Actions are named by their key as the app's page
+  and `user.listActions` list them (`Send_Message`), by `action_id`, or by their path (`send-message`).
 - **Tool names** are `<app>_<action>` (`slack_send-message`); the input schema is built from the
   action's form, so the model sees the same fields, choices and help text a person would.
 - **Fields that hold an id** (a channel, a spreadsheet) come from the user's own account. Each app with such
   a field also gets a `<app>_list-options` tool, and the field's description names it with the exact field
-  key, so the model lists the real values (on the user's connection) instead of guessing an id.
+  key, so the model lists the real values (on the user's connection) instead of guessing an id. The tool
+  searches (`search`) and pages (`paginate`) a long list, the same way the field does in viaSocket's own builder.
 - An error from the app (a wrong channel, a missing permission) comes back to the model as text, not
   as an exception, so one bad call does not end the run.
 
@@ -492,18 +499,21 @@ The screens, the callback and the setup are in
 | --- | --- |
 | `viasocket.user(id, { memorySpaces })` | Scope every call below to one end user. `memorySpaces` grants shared AI-memory spaces (`{ 'teams/acme': 'append' }`); omit it for none. |
 | `user.token()` | Signed embed token for that user; hand it to the frontend. |
-| `user.enable(serviceId, authId)` | Turn a connection into a `scriptId` for running actions. Once per connection. |
-| `user.findEnabled(serviceId)` | The `scriptId` if this app is already enabled, else `null`. Call before `enable`. |
-| `user.listOptions(actionVersionId, { fieldKey, authId, existingFields })` | The values a field accepts, as `{ options, offset }`. Both response shapes normalised; an unreadable connection (revoked, another user's `auth_id`) throws a `ViaSocketError` with status 400 even though the API answers 200. |
-| `viasocket.runAction(scriptId, actionVersionId, inputData)` | Run one action. Returns the app's own response. |
+| `user.listActions(app, { type })` | The app's actions and triggers by its slug (`'gmail'`): each one's `key`, published `version` and every version, plus the app's `serviceId`. What every call below names things by. Cached 10 minutes. |
+| `user.serviceIdFor(app)` | The app's `service_id` by its slug, read from the listing: what the connect popup takes. |
+| `user.enable(app, authId)` | Turn a connection into a `scriptId` for running the app's actions. Once per connection. `app` is the slug (a `service_id` still works, but that flow then takes only version ids). |
+| `user.findEnabled(app)` | The `scriptId` if this app is already enabled, else `null`. Call before `enable`. |
+| `user.listOptions(app, action, { fieldKey, authId, existingFields, search, paginate, version })` | The values a field accepts, as `{ options, paginate, hasMore, message }`: send `paginate` back for the next page, `search` for what the user typed. The id-based form `listOptions(actionVersionId, params)` still works; it cannot search or page. |
+| `viasocket.runAction(scriptId, action, inputData, { version, customCode })` | Run one action by its key (`'Send_Email'`), optionally pinned to a version (`'v55'`). Returns the app's own response; a failure throws with the app's message and its status in `error.body.errorMsg`. An `action_version_id` is still taken in place of the key. |
+| `viasocket.runCode(scriptId, code, inputData, { action, version })` | Run your own JavaScript with the user's connection: `context.inputData`, `context.authData`, `axios` and `fetch` with the credentials attached. Name an `action` to get its helper functions in scope. |
 | `viasocket.catalog.search(key)` | The best 30 apps for what the user typed, as `{ serviceId, name, iconUrl, description }`. No token. |
 | `viasocket.catalog.list({ limit, offset, category })` | Every app, most used first, 200 a page; an empty page ends it. Drop apps whose `versions()` is `null` or empty. No token. |
 | `viasocket.catalog.versions(serviceId)` | One app and every published action and trigger of it, as `{ service, actions, triggers }`. Each action has `action_id` and `action_version_id`, each trigger `trigger_id` and `trigger_version_id`, named as the calls take them: the version id for `runAction`, `listOptions` and `subscribe`; the other for `connect`, automations and the prebuilt UI. `versionid` is the published version (`V107`). `input_schema` is the form schema. `null` for an unknown id. No token. |
 | `viasocket.catalog.serviceIdFor(slug)` | The `service_id` of the app with this slug (`slack`, `google-sheets`). Exact and case-sensitive; an unknown slug throws. Cached. No token. |
-| `viasocket.catalog.versionIdFor(serviceId, event, version?)` | The version id the calls take, for one event: `event` is its `action_id` / `trigger_id` (survives a rename) or its page path (`send-message`). When the app has published a version other than `version`, it warns and returns the published one. Cached 10 minutes. No token. |
+| `viasocket.catalog.versionIdFor(serviceId, event, version?)` | Deprecated: name actions by key with `user.listActions` instead. The version id the id-based routes take, for one event. |
 | `viasocket.catalog.listBuiltIn()` | The built-in plugs (Run AI Model, Pause Workflow, Memory, scraping, GST…): every plug tagged `SDK`, with its actions and whether it needs a sign-in. No token. |
 | `viasocket.sampleEvent(triggerId, authId, authType, inputData?)` | One real event of a trigger for one connection: what a handler reads at `context.req.body`. Takes the `trigger_id`; `authType` is `service.auth_type`. Map from this, never from `sample_output`. |
-| `user.subscribe(triggerVersionId, { authId, inputData, code \| webhook, meta })` | Subscribe to an app event with a handler we run per event. Returns `{ scriptId, hookUrl, … }`. |
+| `user.subscribe(app, trigger, { authId, inputData, version, code \| webhook, meta })` | Subscribe to an app event, by the app's slug and the trigger's key, with a handler we run per event. Returns `{ scriptId, hookUrl, … }`. The id-based form `subscribe(triggerVersionId, params)` still works. |
 | `user.updateSubscription(scriptId, { code, meta })` | Change a live subscription in place. |
 | `user.listFlows()` | Every enabled app, subscription and automation this user has, each `active`, `paused` or `deleted`. |
 | `user.setFlowStatus(scriptId, n)` | Pause (`2`), resume or restore (`1`), or delete (`0`) one flow. Setting the state it is already in succeeds. |
@@ -520,6 +530,13 @@ The screens, the callback and the setup are in
 | `viasocket.login.switchCompany(proxyAuthToken, companyId)` | Moves the session to another of the user's organisations; returns `{ jwt, reply }`, the JWT being that organisation's session. |
 | `viasocket.login.logout(proxyAuthToken)` | Ends the 36Blocks session. |
 | `signEmbedToken({ orgId, projectId, uniqueIdentifier, secret, memorySpaces })` | The signing step on its own, if you want it without a client. |
+
+**Upgrading to 0.17:** apps are named by slug and actions by key, so no ids are copied into code:
+`user.enable('gmail', authId)`, `viasocket.runAction(scriptId, 'Send_Email', input, { version: 'v55' })`,
+`user.listOptions('gmail', 'Send_Email', { …, search, paginate })`, `user.subscribe('gmail', 'New_Email_Arrives', …)`.
+Every id-based call still works as it did. An app enabled with a `service_id` before 0.17 has a flow that
+takes only `action_version_id`s: pass the version id to `runAction` for it, or enable the app again by its slug.
+`listOptions` now answers `{ options, paginate, hasMore }`; `offset` stays as an alias of `paginate`.
 
 **Upgrading from 0.6:** `disableFlow` now pauses a flow (status `2`). In 0.6 it sent status `0`,
 which deletes — a deleted flow is still listed as `deleted` and `enableFlow` restores it.
@@ -544,8 +561,9 @@ const handler = `
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      action_version_id: "${slackSendMessageVersionId}",
-      // Slack Send Message V107's inputData; the keys of event come from a real sampleEvent
+      action: "Send_Message",
+      version: "v107",
+      // Slack Send Message v107's inputData; the keys of event come from a real sampleEvent
       inputData: {
         destination: { messageto: "channel", channel_id: ["${channelPickedAtSetup}"] },
         markdown_content: "New mail from " + event.from + ": " + event.subject
@@ -558,7 +576,7 @@ const handler = `
   return result
 `
 
-await user.subscribe(gmailNewMailVersionId, { authId, inputData: {}, code: handler, meta: { user_id: uniqueIdentifier } })
+await user.subscribe('gmail', 'New_Email_Arrives', { authId, inputData: {}, code: handler, meta: { user_id: uniqueIdentifier } })
 ```
 
 `webhook` is the edge case: a public, unauthenticated URL of yours that we POST every raw event to.
@@ -574,7 +592,8 @@ carrying the API's own `message`, the HTTP `status`, and the parsed `body`.
 
 1. **The secret and the token stay on the server.** The frontend gets a token per popup, nothing more.
 2. **A `scriptId` is a credential.** Anyone holding it can run that app as that user.
-3. **Ids are fetched, never guessed.** Spreadsheet ids, channel ids, repository ids all come from `listOptions`.
+3. **Ids are fetched, never guessed.** Spreadsheet ids, channel ids, repository ids all come from `listOptions`;
+   action keys and versions from `listActions` or the app's page, never typed from memory.
 4. **`existingFields` is not optional when a field depends on another.** Options are scoped by it.
 5. **One `uniqueIdentifier` per end user, forever.** Connections and subscriptions are isolated by it.
 6. **Enable only for actions, and check `findEnabled` first.** Subscriptions need just the connection.

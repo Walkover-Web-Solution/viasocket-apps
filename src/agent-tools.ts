@@ -6,7 +6,7 @@
 
 import type { ViaSocket } from './client.js'
 import { ViaSocketError } from './errors.js'
-import type { CatalogAction, Flow } from './types.js'
+import type { AppAction, CatalogAction, Flow } from './types.js'
 
 export interface AgentToolsOptions {
   /** The end user the tools act for: the same `uniqueIdentifier` their connections were made under. */
@@ -14,8 +14,9 @@ export interface AgentToolsOptions {
   /** The apps, by slug (`slack`, `google-sheets`). Each must already be connected and enabled for the user. */
   apps: string[]
   /**
-   * Which actions of an app, by `action_id` or path (`send-message`). An app left out gets every
-   * published action — fine for a small app, too many tools for a large one (Notion has 57).
+   * Which actions of an app, by key (`Send_Message`, as `user.listActions` lists them), by
+   * `action_id` or by path (`send-message`). An app left out gets every published action — fine
+   * for a small app, too many tools for a large one (Notion has 57).
    */
   actions?: Record<string, string[]>
 }
@@ -156,17 +157,20 @@ export function actionInputSchema(inputSchema: Record<string, unknown>, hint: Pi
 const clip = (text: string) => (text.length > MAX_RESULT ? `${text.slice(0, MAX_RESULT)}… (truncated)` : text)
 
 /**
- * One tool per chosen action of each app. Reads the public catalog only; the user's connection is
- * looked up when a tool first runs, so building tools never fails on an app they have yet to connect.
+ * One tool per chosen action of each app. Reads the app's listing (its keys) and the public
+ * catalog (its input schemas) only; the user's connection is looked up when a tool first runs, so
+ * building tools never fails on an app they have yet to connect.
  */
 export async function agentTools(viasocket: ViaSocket, options: AgentToolsOptions): Promise<AgentTool[]> {
   const user = viasocket.user(options.user)
   const apps = await Promise.all(
     (options.apps ?? []).map(async (slug) => {
-      const serviceId = await viasocket.catalog.serviceIdFor(slug)
-      const app = await viasocket.catalog.versions(serviceId)
+      const listing = await user.listActions(slug, { type: 'action' })
+      const app = await viasocket.catalog.versions(listing.serviceId)
       if (!app) throw new ViaSocketError(`agentTools: "${slug}" has nothing published`, { status: null })
-      return { slug, serviceId, app }
+      // The listing names each action by key; the catalog carries its schema. Joined by the action's id.
+      const byActionId = new Map(listing.actions.map((action) => [action.actionId, action]))
+      return { slug, serviceId: listing.serviceId, app, byActionId }
     })
   )
 
@@ -179,11 +183,15 @@ export async function agentTools(viasocket: ViaSocket, options: AgentToolsOption
     return name
   }
 
-  return apps.flatMap(({ slug, serviceId, app }) => {
+  return apps.flatMap(({ slug, serviceId, app, byActionId }) => {
     const wanted = options.actions?.[slug]
+    const named = (action: CatalogAction, event: string) =>
+      action.action_id === event ||
+      eventPath(action.name) === event ||
+      (action.key ?? byActionId.get(action.action_id)?.key ?? '').toLowerCase() === event.toLowerCase()
     const chosen = wanted
       ? wanted.map((event) => {
-          const match = app.actions.find((action) => action.action_id === event || eventPath(action.name) === event)
+          const match = app.actions.find((action) => named(action, event))
           if (!match) throw new ViaSocketError(`agentTools: ${app.service.name} has no published action "${event}"`, { status: null })
           return match
         })
@@ -232,7 +240,7 @@ export async function agentTools(viasocket: ViaSocket, options: AgentToolsOption
 
     tools.push({
       name: optionsTool,
-      description: `${appName}: lists the values a field of another ${appName} tool accepts (a channel, a sheet, a list), read from the user's own ${appName} account. Call it before filling a field whose description names this tool; send the value, show the label.`,
+      description: `${appName}: lists the values a field of another ${appName} tool accepts (a channel, a sheet, a list), read from the user's own ${appName} account. Call it before filling a field whose description names this tool; send the value, show the label. A long list searches by "search" and pages by "paginate".`,
       parameters: {
         type: 'object',
         properties: {
@@ -243,7 +251,8 @@ export async function agentTools(viasocket: ViaSocket, options: AgentToolsOption
             description:
               'What is already chosen for that tool, in the same shape as its input. A field that depends on another (a sheet inside a spreadsheet) lists nothing until that one is here.'
           },
-          search: { type: 'string', description: 'Words to narrow a long list, such as part of a channel name.' }
+          search: { type: 'string', description: 'Words to narrow a long list, such as part of a channel name.' },
+          paginate: { description: 'The "paginate" value the previous answer gave, to get its next page; same search and chosen.' }
         },
         required: ['tool', 'field']
       },
@@ -254,15 +263,18 @@ export async function agentTools(viasocket: ViaSocket, options: AgentToolsOption
           const found = await findFlow()
           if (!found) return notConnected
           const chosenSoFar = input?.chosen && typeof input.chosen === 'object' ? (input.chosen as Record<string, unknown>) : {}
-          const existingFields = input?.search ? { ...chosenSoFar, _searchText: String(input.search) } : chosenSoFar
-          const { options: values, offset } = await user.listOptions(action.action_version_id, {
-            fieldKey: String(input?.field ?? ''),
-            authId: found.authId,
-            existingFields
-          })
+          const search = input?.search ? String(input.search) : undefined
+          const params = { fieldKey: String(input?.field ?? ''), authId: found.authId, existingFields: chosenSoFar, search, paginate: input?.paginate }
+          // Named by key the field can search and page; an action the listing does not carry falls back to the id-based route.
+          const listed: AppAction | undefined = byActionId.get(action.action_id)
+          const { options: values, hasMore, paginate } = listed
+            ? await user.listOptions(slug, listed.key, params)
+            : await user.listOptions(action.action_version_id, params)
           if (!values.length)
             return 'No values. If this field depends on another, put that one in "chosen" first, or try other search words.'
-          return clip(JSON.stringify({ options: values.map(({ label, value }) => ({ label, value })), more: Boolean(offset) }))
+          return clip(
+            JSON.stringify({ options: values.map(({ label, value }) => ({ label, value })), more: hasMore, ...(hasMore ? { paginate } : {}) })
+          )
         } catch (error) {
           if (error instanceof ViaSocketError) return `${appName}: listing values failed: ${error.message}`
           throw error

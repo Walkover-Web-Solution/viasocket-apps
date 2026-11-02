@@ -66,7 +66,7 @@ test('listOptions normalises the plain shape', async () => {
     authId: 'auth2c38gFVg_rowqm5xi2',
     existingFields: { spreadsheet_Id: '1uk1FuJzU41xPQptrNlhxQn-KyyWc4B_NXjxB8vGPqxI' }
   })
-  assert.deepEqual(result, { options: [{ label: 'Sheet1', value: '0' }], offset: null })
+  assert.deepEqual(result, { options: [{ label: 'Sheet1', value: '0' }], paginate: null, hasMore: false, offset: null })
   assert.deepEqual(JSON.parse(calls[0].body), {
     fieldKey: 'grid_Id',
     auth_id: 'auth2c38gFVg_rowqm5xi2',
@@ -77,7 +77,7 @@ test('listOptions normalises the plain shape', async () => {
 test('listOptions normalises the paginated shape', async () => {
   const { user } = client([ok({ data: [{ label: 'demo', value: '1uk1' }], offset: 'page-2' })])
   const result = await user.listOptions('row5dxvkb0mr', { fieldKey: 'spreadsheet_Id', authId: 'a' })
-  assert.deepEqual(result, { options: [{ label: 'demo', value: '1uk1' }], offset: 'page-2' })
+  assert.deepEqual(result, { options: [{ label: 'demo', value: '1uk1' }], paginate: 'page-2', hasMore: true, offset: 'page-2' })
 })
 
 test('listOptions: a 200 whose data carries { response: { status: 400 } } is an error, not an empty list', async () => {
@@ -186,7 +186,7 @@ test('renameFlow PUTs title, description and meta to the flow route and returns 
 const slackCatalog = {
   service: { service_id: 'rowbu58rc', name: 'Slack', description: null, icon_url: null, auth_type: 'Auth2.0', requires_auth: true },
   actions: [
-    { action_id: 'row1jrbor', action_version_id: 'rowj2u3wc8h5', versionid: 'V107', name: 'Send Message', description: '', input_schema: {} },
+    { action_id: 'row1jrbor', action_version_id: 'rowj2u3wc8h5', key: 'Send_Message', versionid: 'V107', name: 'Send Message', description: '', input_schema: {} },
     { action_id: 'rowA', action_version_id: 'rowAv', versionid: 'V1', name: 'Twin', description: '', input_schema: {} },
     { action_id: 'rowB', action_version_id: 'rowBv', versionid: 'V1', name: 'Twin', description: '', input_schema: {} }
   ],
@@ -195,13 +195,13 @@ const slackCatalog = {
 
 test('catalog.serviceIdFor resolves a slug once, caches it, and refuses an unknown or mis-cased one', async () => {
   const { viasocket, calls } = client([
-    { status: 200, body: { data: { plugins: { slack: { name: 'Slack', rowid: 'rowbu58rc' } } } } },
-    { status: 200, body: { data: { plugins: {} } } }
+    { status: 200, body: { service: { service_id: 'rowbu58rc', slug: 'slack', name: 'Slack' } } },
+    { status: 404, body: { error: "No app has the slug or id 'Slack'. Slugs are case-sensitive." } }
   ])
   assert.equal(await viasocket.catalog.serviceIdFor('slack'), 'rowbu58rc')
   assert.equal(await viasocket.catalog.serviceIdFor('slack'), 'rowbu58rc')
   assert.equal(calls.length, 1, 'the second lookup is cached')
-  assert.equal(calls[0].url, 'https://plug-service.viasocket.com/api/v1/plugins/recommend/services?service=slack')
+  assert.equal(calls[0].url, 'https://plug-service.viasocket.com/api/v1/plugins/slack')
   assert.equal(calls[0].headers.authorization, undefined)
   await assert.rejects(viasocket.catalog.serviceIdFor('Slack'), /No viaSocket app has the slug "Slack"/)
 })
@@ -210,6 +210,7 @@ test('catalog.versionIdFor finds an event by id or path, refuses an ambiguous on
   const { viasocket, calls } = client([{ status: 200, body: slackCatalog }])
   assert.equal(await viasocket.catalog.versionIdFor('rowbu58rc', 'row1jrbor', 'V107'), 'rowj2u3wc8h5')
   assert.equal(await viasocket.catalog.versionIdFor('rowbu58rc', 'send-message'), 'rowj2u3wc8h5')
+  assert.equal(await viasocket.catalog.versionIdFor('rowbu58rc', 'Send_Message'), 'rowj2u3wc8h5', 'the key the readable routes take')
   assert.equal(await viasocket.catalog.versionIdFor('rowbu58rc', 'rowT'), 'rowTv', 'a trigger gives its trigger_version_id')
   assert.equal(calls.length, 1, 'one catalog read serves every lookup')
   await assert.rejects(viasocket.catalog.versionIdFor('rowbu58rc', 'twin'), /several events "twin"/)
@@ -227,7 +228,7 @@ test('catalog.versionIdFor finds an event by id or path, refuses an ambiguous on
 })
 
 test('catalog.versionIdFor does not keep an empty answer: the next call reads again', async () => {
-  const { viasocket, calls } = client([{ status: 200, body: { service: { name: null } } }, { status: 200, body: slackCatalog }])
+  const { viasocket, calls } = client([{ status: 404, body: { error: 'no such app' } }, { status: 200, body: slackCatalog }])
   await assert.rejects(viasocket.catalog.versionIdFor('rowbu58rc', 'row1jrbor'), /no app has the service id/)
   assert.equal(await viasocket.catalog.versionIdFor('rowbu58rc', 'row1jrbor'), 'rowj2u3wc8h5')
   assert.equal(calls.length, 2)
@@ -360,9 +361,9 @@ test('catalog.versions POSTs the service_id and returns the service with its act
   }
   const { viasocket, calls } = client([{ status: 200, body }])
   const catalog = await viasocket.catalog.versions('rowbu58rc')
-  assert.equal(calls[0].method, 'POST')
-  assert.equal(calls[0].url, 'https://flow.sokt.io/func/scriK4LFg2kc')
-  assert.deepEqual(JSON.parse(calls[0].body), { service_id: 'rowbu58rc' })
+  assert.equal(calls[0].method, 'GET')
+  assert.equal(calls[0].url, 'https://plug-service.viasocket.com/api/v1/plugins/rowbu58rc/actions')
+  assert.equal(calls[0].headers.authorization, undefined)
   assert.equal(catalog.service.name, 'Slack')
   assert.deepEqual(catalog.actions.map((a) => [a.action_id, a.action_version_id]), [['row1jrbor', 'rowj2u3wc8h5']])
   assert.deepEqual(catalog.triggers.map((t) => [t.trigger_id, t.trigger_version_id]), [['rowypjs0enry', 'row9na0usfnq']])
@@ -374,9 +375,8 @@ test('catalog.versions is empty, not an error, for an app with nothing published
   assert.deepEqual(await viasocket.catalog.versions('rowzwz91vwaw'), { service, actions: [], triggers: [] })
 })
 
-test('catalog.versions is null for an unknown service id, which the API answers with an empty service', async () => {
-  const service = { service_id: 'rowdoesnotexist', name: null, description: null, icon_url: null, auth_type: null, requires_auth: false }
-  const { viasocket } = client([{ status: 200, body: { service, actions: [], triggers: [] } }])
+test('catalog.versions is null for an unknown service id, which the catalog answers with a 404', async () => {
+  const { viasocket } = client([{ status: 404, body: { error: "No app has the slug or id 'rowdoesnotexist'." } }])
   assert.equal(await viasocket.catalog.versions('rowdoesnotexist'), null)
 })
 
@@ -566,4 +566,128 @@ test('login.switchCompany posts company_ref_id and finds the jwt; logout sends D
   assert.equal(calls[1].method, 'DELETE')
   assert.equal(calls[1].url, 'https://routes.msg91.com/api/c/logout')
   await assert.rejects(() => viasocket.login.switchCompany('pat-1', ''), /companyId is required/)
+})
+
+// ---------------------------------------------------------------- the readable routes: apps by slug, actions by key
+
+const gmailListing = {
+  service: 'gmail',
+  service_id: 'rowo0bqrhj5g',
+  actions: [
+    {
+      key: 'Send_Email', name: 'Send Email', type: 'action', description: 'Sends an email.', action_id: 'rowogelpy0h6', version: 'V55', action_version_id: 'rowwj0sfmhub',
+      versions: [{ version: 'V55', action_version_id: 'rowwj0sfmhub', status: 'published' }, { version: 'V54', action_version_id: 'rowg2h7k0abc', status: 'published' }]
+    },
+    { key: 'New_Email_Arrives', name: 'New Email Arrives', type: 'trigger', description: '', action_id: 'rowqz5a1b2c3', version: 'V11', action_version_id: 'rowd4e5f6g7h', versions: [] }
+  ]
+}
+
+test('listActions reads the app by its slug with the token, maps the listing, filters by type and caches it', async () => {
+  const { user, calls } = client([ok(gmailListing)])
+  const all = await user.listActions('gmail')
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/services/gmail/actions')
+  assert.equal(calls[0].method, 'GET')
+  assert.match(calls[0].headers.authorization, /^eyJ/)
+  assert.equal(all.app, 'gmail')
+  assert.equal(all.serviceId, 'rowo0bqrhj5g')
+  assert.deepEqual(all.actions[0], {
+    key: 'Send_Email', name: 'Send Email', type: 'action', description: 'Sends an email.', actionId: 'rowogelpy0h6', version: 'V55', actionVersionId: 'rowwj0sfmhub',
+    versions: [{ version: 'V55', actionVersionId: 'rowwj0sfmhub', status: 'published' }, { version: 'V54', actionVersionId: 'rowg2h7k0abc', status: 'published' }]
+  })
+  const triggers = await user.listActions('gmail', { type: 'trigger' })
+  assert.deepEqual(triggers.actions.map((action) => action.key), ['New_Email_Arrives'])
+  assert.equal(await user.serviceIdFor('gmail'), 'rowo0bqrhj5g')
+  assert.equal(calls.length, 1, 'one read serves the filtered list and the service id')
+})
+
+test('listActions: an unknown slug is a 404 with the message, and is not kept', async () => {
+  const { user, calls } = client([{ status: 404, body: { success: false, message: "Unknown service 'gmial'." } }, ok(gmailListing)])
+  await assert.rejects(() => user.listActions('gmial'), (error) => error instanceof ViaSocketError && error.status === 404 && /Unknown service/.test(error.message))
+  await user.listActions('gmial')
+  assert.equal(calls.length, 2)
+})
+
+test('enable by slug posts to the services route and keeps the slug; by service id it keeps the old route', async () => {
+  const reply = { script_id: 'scriXk3PqLm9', webhook_url: 'https://flow.sokt.io/func/scriXk3PqLm9', service: 'gmail', service_id: 'rowo0bqrhj5g', auth_id: 'auth8f3a9c2d' }
+  const { user, calls } = client([{ status: 201, body: { success: true, data: reply } }, ok({ script_id: 's', webhook_url: 'w', service_id: 'rowo0bqrhj5g', auth_id: 'a' })])
+  assert.deepEqual(await user.enable('gmail', 'auth8f3a9c2d'), {
+    scriptId: 'scriXk3PqLm9', webhookUrl: 'https://flow.sokt.io/func/scriXk3PqLm9', serviceId: 'rowo0bqrhj5g', authId: 'auth8f3a9c2d', app: 'gmail'
+  })
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/services/gmail/enable/auth8f3a9c2d')
+  assert.equal(calls[0].body, '')
+  await user.enable('rowo0bqrhj5g', 'a')
+  assert.equal(calls[1].url, 'https://flow-api.viasocket.com/embed/enable/rowo0bqrhj5g/a')
+})
+
+test('findEnabled takes the slug: the service id comes from the listing', async () => {
+  const flows = { flows: [{ id: 'scriGMAIL', title: 'rowo0bqrhj5g', status: 'active', webhook: '', auth_id: 'a', service_id: 'rowo0bqrhj5g' }] }
+  const { user, calls } = client([ok(gmailListing), ok(flows)])
+  assert.equal(await user.findEnabled('gmail'), 'scriGMAIL')
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/services/gmail/actions')
+  assert.equal(calls[1].url, 'https://flow-api.viasocket.com/projects/proj9U0smb62/integrations')
+})
+
+test('runAction names the action by key, pins a version, still takes a version id, and runCode sends custom_code', async () => {
+  const { viasocket, calls } = client([
+    { status: 200, body: { id: '19a3', threadId: '19a3' } },
+    { status: 200, body: { ok: 1 } },
+    { status: 200, body: { ok: 2 } },
+    { status: 200, body: { ok: 3 } }
+  ])
+  assert.deepEqual(await viasocket.runAction('scriXk3PqLm9', 'Send_Email', { to: 'a@b.c' }, { version: 'v55' }), { id: '19a3', threadId: '19a3' })
+  assert.equal(calls[0].url, 'https://flow.sokt.io/func/scriXk3PqLm9')
+  assert.equal(calls[0].headers.authorization, undefined)
+  assert.deepEqual(JSON.parse(calls[0].body), { action: 'Send_Email', version: 'v55', inputData: { to: 'a@b.c' } })
+  await viasocket.runAction('scriXk3PqLm9', 'rowwj0sfmhub', { to: 'a@b.c' }, { version: 'v55' })
+  assert.deepEqual(JSON.parse(calls[1].body), { action_version_id: 'rowwj0sfmhub', inputData: { to: 'a@b.c' } }, 'a version id names the version itself')
+  await viasocket.runCode('scriXk3PqLm9', 'return 1', {}, { action: 'Send_Email' })
+  assert.deepEqual(JSON.parse(calls[2].body), { custom_code: 'return 1', inputData: {}, action: 'Send_Email' })
+  await viasocket.runAction('scriXk3PqLm9', 'Send_Email', {}, { customCode: 'return 2' })
+  assert.deepEqual(JSON.parse(calls[3].body), { action: 'Send_Email', custom_code: 'return 2', inputData: {} })
+})
+
+test('a failed run carries the app own message, with the status the app answered inside the body', async () => {
+  const refused = { success: false, errorMsg: { status: 404, message: 'Requested entity was not found.', data: { error: { code: 404 } } } }
+  const { viasocket } = client([{ status: 400, body: refused }])
+  await assert.rejects(() => viasocket.runAction('scri1', 'Send_Email', {}), (error) => {
+    assert.ok(error instanceof ViaSocketError)
+    assert.equal(error.status, 400)
+    assert.equal(error.message, 'Requested entity was not found.')
+    assert.equal(error.body.errorMsg.status, 404)
+    return true
+  })
+})
+
+test('listOptions by app and key posts search and paginate to the options route and maps the page', async () => {
+  const { user, calls } = client([
+    ok({ options: [{ label: 'Invoices', value: 'Label_12' }], paginate: 'CAESBm5leHQ3', has_more: true }),
+    ok({ options: [], paginate: null, has_more: false, message: 'Choose a spreadsheet first.' })
+  ])
+  const page = await user.listOptions('gmail', 'Modify_Email_Labels', { fieldKey: 'labels', authId: 'auth8f3a9c2d', search: 'inv', version: 'v3' })
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/services/gmail/actions/Modify_Email_Labels/options')
+  assert.deepEqual(JSON.parse(calls[0].body), { auth_id: 'auth8f3a9c2d', fieldKey: 'labels', existingFields: {}, version: 'v3', search: 'inv' })
+  assert.deepEqual(page, { options: [{ label: 'Invoices', value: 'Label_12' }], paginate: 'CAESBm5leHQ3', hasMore: true, offset: 'CAESBm5leHQ3' })
+
+  const next = await user.listOptions('google-sheets', 'Add_Row', { fieldKey: 'sheet', authId: 'a', existingFields: { spreadsheet: '1' }, paginate: 'CAESBm5leHQ3' })
+  assert.deepEqual(JSON.parse(calls[1].body), { auth_id: 'a', fieldKey: 'sheet', existingFields: { spreadsheet: '1' }, paginate: 'CAESBm5leHQ3' })
+  assert.deepEqual(next, { options: [], paginate: null, hasMore: false, message: 'Choose a spreadsheet first.', offset: null })
+})
+
+test('listOptions by version id still travels the old route, with the search text inside existingFields', async () => {
+  const { user, calls } = client([ok([{ label: 'A', value: 'a' }])])
+  await user.listOptions('row5dxvkb0mr', { fieldKey: 'grid_Id', authId: 'a', search: 'ab' })
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/list-options/row5dxvkb0mr')
+  assert.deepEqual(JSON.parse(calls[0].body), { fieldKey: 'grid_Id', auth_id: 'a', existingFields: { _searchText: 'ab' } })
+})
+
+test('subscribe by app and trigger key posts to the triggers route with the version', async () => {
+  const { user, calls } = client([
+    ok({ script_id: 'scriQw8RtY2u', title: 'rowd4e5f6g7h', auth_id: 'auth8f3a9c2d', inputData: { label: 'INBOX', hookUrl: 'https://flow.sokt.io/func/scriQw8RtY2u' }, meta: { customer: 'acme' } })
+  ])
+  const result = await user.subscribe('gmail', 'New_Email_Arrives', { authId: 'auth8f3a9c2d', inputData: { label: 'INBOX' }, version: 'v11', code: 'return 1', meta: { customer: 'acme' } })
+  assert.equal(calls[0].url, 'https://flow-api.viasocket.com/embed/services/gmail/triggers/New_Email_Arrives/subscribe')
+  assert.deepEqual(JSON.parse(calls[0].body), { auth_id: 'auth8f3a9c2d', inputData: { label: 'INBOX' }, meta: { customer: 'acme' }, code: 'return 1', version: 'v11' })
+  assert.equal(result.scriptId, 'scriQw8RtY2u')
+  assert.equal(result.hookUrl, 'https://flow.sokt.io/func/scriQw8RtY2u')
+  await assert.rejects(() => user.subscribe('gmail', 'New_Email_Arrives', { authId: 'a', inputData: {} }), /exactly one of `code`/)
 })
