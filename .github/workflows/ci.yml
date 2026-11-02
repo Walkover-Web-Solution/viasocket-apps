@@ -36,6 +36,8 @@ jobs:
             extras: '[langchain,llamaindex]'
           - python: '3.12'
             extras: '[crewai]'
+          - python: '3.12'
+            extras: '[adk]'
     defaults:
       run:
         working-directory: python

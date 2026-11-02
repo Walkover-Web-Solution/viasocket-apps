@@ -3,13 +3,13 @@
 Your own agent, acting in the apps each of your users connected through viaSocket: every action of
 an app is a tool, run on that user's own connection. Slack's Send Message, Google Sheets' Add New
 Row, HubSpot's Create Deal — any of 2,300+ apps, with no connector code and no OAuth on your side.
-Works with LangChain, CrewAI and LlamaIndex.
+Works with LangChain, CrewAI, LlamaIndex and Google ADK.
 
 It is the Python side of the [`viasocket-apps`](https://www.npmjs.com/package/viasocket-apps) npm
 package, and builds the same tools from the same catalog. No dependencies of its own; Python 3.10+.
 
 ```sh
-pip install "viasocket[langchain]"     # pick your framework: [langchain], [crewai] or [llamaindex]
+pip install "viasocket[langchain]"     # pick your framework: [langchain], [crewai], [llamaindex] or [adk]
 ```
 
 The part in brackets installs that framework with the package. Plain `pip install viasocket` is enough when the
@@ -87,6 +87,22 @@ agent = FunctionAgent(
     llm=llm,
 )
 ```
+
+## Google ADK
+
+```python
+from google.adk.agents import Agent
+from viasocket.adk import viasocket_tools
+
+root_agent = Agent(
+    model="gemini-flash-latest",
+    name="ops_agent",
+    instruction="Keep the team updated in Slack.",
+    tools=viasocket_tools(viasocket, user="user_123", apps=["slack"], actions={"slack": ["send-message"]}),
+)
+```
+
+Each tool hands the model the action's JSON Schema as its declaration and runs the call off the event loop.
 
 ## How the tools behave
 
