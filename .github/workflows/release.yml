@@ -1,24 +1,49 @@
 name: Release
 
-# Publishes to npm when a version tag is pushed:
-#   npm version patch|minor|major   (bumps package.json and creates the tag)
-#   git push --follow-tags
+# Publishes viasocket-apps to npm the same way the Python package reaches PyPI: push a tag, the tests run,
+# then the publish job waits for a reviewer to approve it in the `npm` environment.
+#
+# A release is: set "version" in package.json (npm version patch|minor|major does it and makes the tag),
+# merge it, then push the tag v<that version> (v0.17.1): git push --follow-tags
 #
 # No token: npm trusted publishing. npmjs.com → viasocket-apps → Settings → Trusted publishing names this
-# repository and this file (release.yml), and npm accepts the run's OIDC identity instead of a secret, the
-# same way the Python package publishes to PyPI. id-token: write is what lets the run prove who it is; it also
-# signs the build's provenance. Trusted publishing needs npm 11.5.1 or later, hence the npm upgrade below.
+# repository, this file (release.yml) and the environment `npm`, and npm accepts the run's OIDC identity
+# instead of a secret. id-token: write lets the publish job prove who it is and signs the build's provenance.
+# Trusted publishing needs npm 11.5.1 or later, hence the npm upgrade.
 on:
   push:
     tags: ['v*']
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  publish:
+  test:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install
+      - run: npm test
+      # The tag and package.json must agree, or a stale tag would republish an old version.
+      - name: The tag matches the version in package.json
+        run: |
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$PKG" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG}" >&2
+            exit 1
+          fi
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    # Matches the environment on npm's trusted publisher; its required reviewer is the approval step.
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,13 +52,5 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest
       - run: npm install
-      - run: npm test
-      # The tag and package.json must agree, or a stale tag would republish an old version.
-      - name: Check the tag matches package.json
-        run: |
-          PKG="v$(node -p "require('./package.json').version")"
-          if [ "$PKG" != "${GITHUB_REF_NAME}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG}" >&2
-            exit 1
-          fi
+      # prepublishOnly builds and tests again, so what is published is what was just tested.
       - run: npm publish --provenance --access public
