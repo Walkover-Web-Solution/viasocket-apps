@@ -7,6 +7,7 @@
  *   node viasocket-login.mjs login [--env .env] [--no-open] [--timeout 300]
  *   node viasocket-login.mjs setup [--env .env] [--project <id> | --new] [--name <title>] [--no-open] [--timeout 300]
  *   node viasocket-login.mjs mcp [--file viasocket.mcp.json] [--ids viasocket.mcp.ids.json] [--call <tool> --args <json> --token <t>]
+ *   node viasocket-login.mjs connect <app> [--user <id>] [--env .env] [--no-open] [--timeout 300]
  *
  * The same commands ship in the viasocket-apps package: `npx viasocket-apps login` / `setup` / `mcp`.
  *
@@ -27,11 +28,15 @@
  * updates instead of duplicating, and tests the URL with tools/list. It mints VIASOCKET_MCP_TOKEN
  * from the agent token (signing in first when .env has none) and keeps it in .env.
  *
+ * `connect <app>` connects one app for one end user without a frontend: it serves a one-button page on
+ * 127.0.0.1 that opens viaSocket's consent popup through the connect script, then enables the app, so
+ * the agent tools run on it at once. It needs what `setup` writes.
+ *
  * No dependencies, Node 18+. Exit code 0 when .env is written, 1 when sign-in or a call failed,
  * 2 on bad usage, 3 when `setup` needs --project because the workspace has several embeds.
  */
 import { createServer } from 'node:http'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
@@ -55,13 +60,16 @@ const MCP_HOST = MCP_API.replace(/\/api$/, '')
 function usage(code) {
   console.log(
     [
-      'usage: node viasocket-login.mjs <login | setup | mcp> [options]',
+      'usage: node viasocket-login.mjs <login | setup | mcp | connect <app>> [options]',
       '',
       '  login             sign in; writes VIASOCKET_AGENT_TOKEN and VIASOCKET_ORG_ID',
       '  setup             login if needed, then the embed project and signing secret a product needs:',
       '                    writes VIASOCKET_PROJECT_ID and VIASOCKET_EMBED_SECRET too',
       "  mcp               create or update the product's MCP server from viasocket.mcp.json, then test it",
+      '  connect <app>     connect one app (slack, gmail, google-sheets) for one end user and enable it, from a',
+      '                    page this command opens; needs what setup writes. Try the agent tools without a frontend',
       '',
+      '  --user <id>       connect: the end user it is for, as your agent tools name them (default me)',
       '  --file <file>     mcp: the definition (default viasocket.mcp.json)',
       '  --ids <file>      mcp: where the ids of what it made are kept (default viasocket.mcp.ids.json)',
       '  --call <tool>     mcp: after the sync, call this tool on the URL with --args <json> and, on a login server, --token <t>',
@@ -90,7 +98,9 @@ function parseArgs(argv) {
     ids: 'viasocket.mcp.ids.json',
     call: '',
     args: '{}',
-    token: ''
+    token: '',
+    app: '',
+    user: 'me'
   }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -100,6 +110,9 @@ function parseArgs(argv) {
       return value
     }
     if (arg === 'login' || arg === 'setup' || arg === 'mcp') options.command = arg
+    else if (arg === 'connect') options.command = arg
+    else if (options.command === 'connect' && !options.app && !arg.startsWith('-')) options.app = arg
+    else if (arg === '--user') options.user = next()
     else if (arg === '--env') options.env = next()
     else if (arg === '--file') options.file = next()
     else if (arg === '--ids') options.ids = next()
@@ -118,6 +131,10 @@ function parseArgs(argv) {
     }
   }
   if (!Number.isFinite(options.timeout) || options.timeout <= 0) usage(2)
+  if (options.command === 'connect' && !options.app) {
+    console.error('connect needs the app, by its slug: connect slack')
+    usage(2)
+  }
   return options
 }
 
@@ -872,11 +889,170 @@ async function mcpCommand(options, envFile) {
   if (process.exitCode === undefined) process.exitCode = 0
 }
 
+// ---- connect: one app for one end user, from the terminal --------------------------------------------
+
+/** viaSocket's connect script: the only supported way to open the consent popup. */
+const CONNECT_SCRIPT = process.env.VIASOCKET_CONNECT_SCRIPT || 'https://flow.viasocket.com/connect.js'
+const SLUG_URL = process.env.VIASOCKET_SLUG_URL || 'https://plug-service.viasocket.com/api/v1/plugins/recommend/services'
+
+const base64Url = (buffer) => Buffer.from(buffer).toString('base64url')
+
+/** The embed token, exactly as `signEmbedToken` in the package signs it. */
+function embedToken(orgId, projectId, uniqueIdentifier, secret) {
+  const header = base64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const payload = base64Url(JSON.stringify({ org_id: orgId, project_id: projectId, unique_identifier: uniqueIdentifier }))
+  const signature = createHmac('sha256', secret).update(`${header}.${payload}`).digest()
+  return `${header}.${payload}.${base64Url(signature)}`
+}
+
+/** One call to the embed API as the end user; returns `data`, or throws with viaSocket's message. */
+async function embedApi(token, method, path, body) {
+  const response = await fetch(`${API}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', authorization: token },
+    body,
+    signal: AbortSignal.timeout(30_000)
+  })
+  const reply = await response.json().catch(() => null)
+  if (!response.ok || reply?.success === false) {
+    throw new Error(`viaSocket refused ${method} ${path}: ${reply?.message || response.status}`)
+  }
+  return reply?.data
+}
+
+async function serviceIdFor(slug) {
+  const response = await fetch(`${SLUG_URL}?service=${encodeURIComponent(slug)}`, { signal: AbortSignal.timeout(30_000) }).catch(() => null)
+  const reply = response?.ok ? await response.json().catch(() => null) : null
+  return reply?.data?.plugins?.[slug]?.rowid || ''
+}
+
+/**
+ * The page the browser opens: one button, because a popup needs a click. It loads the connect
+ * script, opens the app's consent screen and posts the result back to this command.
+ */
+const connectPage = ({ app, token, serviceId, nonce }) => `<!doctype html><meta charset="utf-8"><title>Connect ${app}</title>
+<body style="font:16px system-ui;margin:3em auto;max-width:34em;text-align:center">
+<h1>Connect ${app}</h1><p id="note">Click the button and sign in to ${app} in the window that opens.</p>
+<button id="go" style="font:inherit;padding:.6em 1.4em" disabled>Loading…</button>
+<script src="${CONNECT_SCRIPT}"></script>
+<script>
+const note = document.getElementById('note'), go = document.getElementById('go')
+const report = (body) => fetch('/done?nonce=${nonce}', { method: 'POST', body: JSON.stringify(body) })
+if (typeof window.openViasocketConnection !== 'function') note.textContent = 'The viaSocket connect script did not load. Check your connection and run the command again.'
+else { go.disabled = false; go.textContent = 'Connect ${app}' }
+window.addEventListener('message', (event) => {
+  const data = event.data || {}
+  if (data.serviceId && data.serviceId !== ${JSON.stringify(serviceId)}) return
+  if (data.type === 'viasocket_connection_success' && data.data && data.data.id) {
+    report({ authId: data.data.id }); note.textContent = 'Connected. You can close this tab and go back to your terminal.'; go.remove()
+  } else if (data.type === 'viasocket_connection_error') {
+    const message = (data.error && data.error.message) || 'the app rejected the connection'
+    // A blocked popup is the browser's doing, not a refusal: let the user allow it and click again.
+    if (/popup/i.test(message) && /block/i.test(message)) { note.textContent = 'Your browser blocked the window. Allow popups for this page, then click the button again.'; return }
+    report({ error: message.replace(/\\.+$/, '') }); note.textContent = 'The connection failed. See your terminal.'
+  } else if (data.type === 'viasocket_connection_closed') {
+    note.textContent = 'The window seems closed. If you finished signing in, wait a moment; otherwise click the button again.'
+  }
+})
+go.onclick = () => window.openViasocketConnection(${JSON.stringify(token)}, ${JSON.stringify(serviceId)})
+</script></body>`
+
+/** Serves the page on 127.0.0.1 and resolves with { authId } or { error }, or null on timeout. */
+function waitForConnection({ app, token, serviceId, timeout, onReady }) {
+  const nonce = randomBytes(16).toString('hex')
+  return new Promise((resolveResult) => {
+    const server = createServer((request, response) => {
+      const url = new URL(request.url, 'http://127.0.0.1')
+      if (request.method === 'GET' && url.pathname === '/') {
+        response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+        response.end(connectPage({ app, token, serviceId, nonce }))
+        return
+      }
+      if (request.method === 'POST' && url.pathname === '/done' && url.searchParams.get('nonce') === nonce) {
+        let body = ''
+        request.on('data', (chunk) => (body += chunk))
+        request.on('end', () => {
+          response.writeHead(204).end()
+          let result = null
+          try {
+            result = JSON.parse(body)
+          } catch {
+            /* ignored below */
+          }
+          if (result?.authId || result?.error) {
+            server.close()
+            resolveResult(result)
+          }
+        })
+        return
+      }
+      response.writeHead(404, { 'Content-Type': 'text/plain' })
+      response.end('viasocket connect is waiting for the browser.\n')
+    })
+    server.listen(0, '127.0.0.1', () => onReady(`http://127.0.0.1:${server.address().port}/`))
+    setTimeout(() => {
+      server.close()
+      resolveResult(null)
+    }, timeout * 1000).unref()
+  })
+}
+
+/**
+ * `connect <app>`: connects one app for one end user (`--user`, default "me") without a frontend —
+ * the consent popup opens from a page this command serves — then enables it, so the agent tools
+ * (`viasocket-apps/langchain`, `/ai-sdk`, the Python package) run on it right away.
+ */
+async function connectCommand(options, envFile) {
+  const [orgId, projectId, secret] = [ORG_ENV, PROJECT_ENV, SECRET_ENV].map((key) => getEnv(envFile, key) || process.env[key] || '')
+  if (!orgId || !projectId || !secret) {
+    console.error(`${envFile} needs ${ORG_ENV}, ${PROJECT_ENV} and ${SECRET_ENV}. Run \`npx viasocket-apps setup\` first.`)
+    process.exitCode = 1
+    return
+  }
+  const serviceId = await serviceIdFor(options.app)
+  if (!serviceId) {
+    console.error(`No viaSocket app has the slug "${options.app}". Slugs are exact and lowercase, such as slack, gmail or google-sheets.`)
+    process.exitCode = 1
+    return
+  }
+  const token = embedToken(orgId, projectId, options.user, secret)
+
+  const result = await waitForConnection({
+    app: options.app,
+    token,
+    serviceId,
+    timeout: options.timeout,
+    onReady: (url) => {
+      console.log(`Connect ${options.app} for user "${options.user}": open ${url} and click the button.`)
+      if (options.open) openBrowser(url)
+    }
+  })
+  if (!result) {
+    console.error(`Nothing arrived in ${options.timeout}s. Run the command again.`)
+    process.exitCode = 1
+    return
+  }
+  if (result.error) {
+    console.error(`${options.app} was not connected: ${result.error}.`)
+    process.exitCode = 1
+    return
+  }
+
+  // Enable once, so actions can run; an app this user already enabled is reused, never enabled twice.
+  const flows = (await embedApi(token, 'GET', `/projects/${projectId}/integrations`))?.flows ?? []
+  const existing = flows.find((flow) => flow.service_id === serviceId && (flow.status === 'active' || flow.status === 'paused'))
+  if (!existing) await embedApi(token, 'POST', `/embed/enable/${serviceId}/${result.authId}`, '')
+  console.log(`${options.app} is connected for user "${options.user}"${existing ? ' (it was already enabled)' : ' and enabled'}.`)
+  console.log(`Your agent's tools for it work now, for example: viasocketTools(viasocket, { user: '${options.user}', apps: ['${options.app}'] })`)
+  process.exitCode = 0
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   const envFile = resolve(process.cwd(), options.env)
 
   if (options.command === 'mcp') return mcpCommand(options, envFile)
+  if (options.command === 'connect') return connectCommand(options, envFile)
 
   if (options.command === 'login') {
     // An explicit login always signs in: that is how a developer switches workspace.
