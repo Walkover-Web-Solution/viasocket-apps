@@ -7,7 +7,7 @@ viasocket.adk — the apps a user connected, as Google ADK tools.
     tools = viasocket_tools(viasocket, user="user_123", apps=["slack"], actions={"slack": ["send-message"]})
     root_agent = Agent(model="gemini-flash-latest", name="ops_agent", instruction="...", tools=tools)
 
-Needs `google-adk` 1.0 or later: `pip install "viasocket[adk]"`.
+Needs `google-adk` 1.10 or later: `pip install "viasocket[adk]"`.
 """
 
 from __future__ import annotations

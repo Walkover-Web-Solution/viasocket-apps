@@ -21,7 +21,7 @@ classifiers = [
 langchain = ["langchain-core>=0.3"]
 crewai = ["crewai>=0.80"]
 llamaindex = ["llama-index-core>=0.12"]
-adk = ["google-adk>=1.0"]
+adk = ["google-adk>=1.10"]
 
 [project.urls]
 Homepage = "https://github.com/Walkover-Web-Solution/viasocket-apps/tree/main/python#readme"
