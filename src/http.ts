@@ -29,6 +29,13 @@ export interface RequestOptions {
   signal?: AbortSignal
 }
 
+/**
+ * The URL as an error may show it. A run URL's path is `/func/<script_id>`, and the script_id is the
+ * credential that runs actions on a user's connection: errors reach agent tools, models and logs, so
+ * it never appears in one.
+ */
+const shownUrl = (url: string) => url.replace(/\/func\/[^/?#]+/, '/func/<script_id>')
+
 export async function request<T = unknown>(options: RequestOptions): Promise<Envelope<T>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (options.token) headers.authorization = options.token
@@ -38,7 +45,7 @@ export async function request<T = unknown>(options: RequestOptions): Promise<Env
     response = await options.fetchImpl(options.url, { method: options.method, headers, body: options.body, signal: options.signal })
   } catch (error) {
     if ((error as Error)?.name === 'TimeoutError' || (error as Error)?.name === 'AbortError') throw error
-    throw new ViaSocketError(`Request to ${options.url} failed: ${(error as Error)?.message || 'network error'}`, { status: null })
+    throw new ViaSocketError(`Request to ${shownUrl(options.url)} failed: ${(error as Error)?.message || 'network error'}`, { status: null })
   }
 
   const text = await response.text()
@@ -65,7 +72,7 @@ export async function request<T = unknown>(options: RequestOptions): Promise<Env
       errorMsg ||
       raw?.message ||
       raw?.error?.message ||
-      `viaSocket responded ${response.status} for ${options.method} ${options.url}`
+      `viaSocket responded ${response.status} for ${options.method} ${shownUrl(options.url)}`
     throw new ViaSocketError(message, { status: response.status, body: payload })
   }
 

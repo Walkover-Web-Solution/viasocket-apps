@@ -43,6 +43,15 @@ class ViaSocketError(Exception):
         self.body = body
 
 
+def _shown_url(url: str) -> str:
+    """
+    The URL as an error may show it. A run URL's path is `/func/<script_id>`, and the script_id is the
+    credential that runs actions on a user's connection: errors reach agent tools, models and logs, so
+    it never appears in one.
+    """
+    return re.sub(r"/func/[^/?#]+", "/func/<script_id>", url, count=1)
+
+
 def _urllib_transport(method: str, url: str, headers: Dict[str, str], body: Optional[bytes], timeout: float):
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
@@ -51,7 +60,7 @@ def _urllib_transport(method: str, url: str, headers: Dict[str, str], body: Opti
     except urllib.error.HTTPError as error:
         return error.code, error.read().decode("utf-8", "replace")
     except (urllib.error.URLError, TimeoutError) as error:
-        raise ViaSocketError(f"Request to {url} failed: {getattr(error, 'reason', error)}") from error
+        raise ViaSocketError(f"Request to {_shown_url(url)} failed: {getattr(error, 'reason', error)}") from error
 
 
 def _b64url(data: bytes) -> str:
@@ -129,7 +138,7 @@ class ViaSocket:
             message = (
                 raw.get("message")
                 or (nested.get("message") if isinstance(nested, dict) else None)
-                or f"viaSocket responded {status} for {method} {url}"
+                or f"viaSocket responded {status} for {method} {_shown_url(url)}"
             )
             raise ViaSocketError(message, status=status, body=payload)
         return envelope["data"] if envelope is not None else payload

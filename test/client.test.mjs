@@ -691,3 +691,18 @@ test('subscribe by app and trigger key posts to the triggers route with the vers
   assert.equal(result.hookUrl, 'https://flow.sokt.io/func/scriQw8RtY2u')
   await assert.rejects(() => user.subscribe('gmail', 'New_Email_Arrives', { authId: 'a', inputData: {} }), /exactly one of `code`/)
 })
+
+test('a failed run never shows the script_id, the credential that runs actions, in its error', async () => {
+  const { viasocket } = client([{ status: 502, body: '' }])
+  await assert.rejects(() => viasocket.runAction('scriSECRET123', 'row5dxvkb0mr', {}), (error) => {
+    assert.ok(error instanceof ViaSocketError)
+    assert.doesNotMatch(error.message, /scriSECRET123/)
+    assert.match(error.message, /\/func\/<script_id>/)
+    return true
+  })
+  const offline = new ViaSocket({ orgId: 'o', projectId: 'p', secret: 's', fetch: async () => { throw new TypeError('fetch failed') } })
+  await assert.rejects(() => offline.runAction('scriSECRET123', 'row5dxvkb0mr', {}), (error) => {
+    assert.doesNotMatch(error.message, /scriSECRET123/)
+    return true
+  })
+})
