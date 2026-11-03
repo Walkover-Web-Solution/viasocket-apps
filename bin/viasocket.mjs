@@ -48,7 +48,7 @@ const SECRET_ENV = 'VIASOCKET_EMBED_SECRET'
 /** The MCP server; its protected-resource metadata names the authorization server. */
 const RESOURCE = process.env.VIASOCKET_OAUTH_RESOURCE || 'https://connect.viasocket.com/mcp'
 /** Answers the org the token belongs to; the skill's agent-access page names the same call. */
-const WHOAMI_URL = process.env.VIASOCKET_WHOAMI_URL || 'https://flow.sokt.io/func/scriDAYtpykg'
+const WHOAMI_URL = process.env.VIASOCKET_WHOAMI_URL || 'https://flow-api.viasocket.com/oauth/v1/me'
 /** The dashboard's API: embed projects and the signing secret, with the token bare in Authorization. */
 const API = (process.env.VIASOCKET_API_URL || 'https://flow-api.viasocket.com').replace(/\/+$/, '')
 const DASHBOARD = 'https://flow.viasocket.com/agent-access'
@@ -268,10 +268,10 @@ async function whoami(token) {
   try {
     const response = await fetch(WHOAMI_URL, { headers: { Authorization: token }, signal: AbortSignal.timeout(15000) })
     if (!response.ok) return null
-    // Live shape: { user_id, org: { id }, company_id, viasocket_token, iat }; the others are tolerated.
+    // Live shape: { data: { user, org: { id, name } } }; a 401 is a bad token. Older shapes are tolerated.
     const body = await response.json()
-    const id = body?.org?.id ?? body?.data?.org?.id ?? body?.data?.id ?? body?.id
-    const name = body?.org?.name ?? body?.data?.name ?? body?.name
+    const id = body?.data?.org?.id ?? body?.org?.id ?? body?.data?.id ?? body?.id
+    const name = body?.data?.org?.name ?? body?.org?.name ?? body?.data?.name ?? body?.name
     return id || name ? { id: id ? String(id) : '', name: name ? String(name) : '' } : null
   } catch {
     return null
@@ -1046,7 +1046,9 @@ async function connectCommand(options, envFile) {
   const existing = flows.find((flow) => flow.service_id === serviceId && (flow.status === 'active' || flow.status === 'paused'))
   if (!existing) await embedApi(token, 'POST', `/embed/services/${encodeURIComponent(options.app)}/enable/${result.authId}`, '')
   console.log(`${options.app} is connected for user "${options.user}"${existing ? ' (it was already enabled)' : ' and enabled'}.`)
-  console.log(`Your agent's tools for it work now, for example: viasocketTools(viasocket, { user: '${options.user}', apps: ['${options.app}'] })`)
+  console.log(
+    `Your agent's tools for it work now, for example: viasocketTools(viasocket, { user: '${options.user}', apps: ['${options.app}'] })`
+  )
   process.exitCode = 0
 }
 
