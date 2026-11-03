@@ -302,6 +302,21 @@ def test_llamaindex_tools():
     assert run_body(calls)["inputData"] == INPUT
 
 
+def test_openai_agents_tools():
+    pytest.importorskip("agents")
+    import asyncio
+
+    from viasocket.openai_agents import viasocket_tools
+
+    viasocket, calls = make_client([ENABLED_SLACK])
+    send, _ = viasocket_tools(viasocket, "user_123", ["slack"])
+    assert send.name == "slack_send-message"
+    assert send.strict_json_schema is False
+    assert send.params_json_schema["required"] == ["text"]
+    assert asyncio.run(send.on_invoke_tool(None, json.dumps(INPUT))) == '{"ok": true}'
+    assert run_body(calls)["inputData"] == INPUT
+
+
 def test_adk_tools():
     pytest.importorskip("google.adk")
     import asyncio

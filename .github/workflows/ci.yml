@@ -38,6 +38,8 @@ jobs:
             extras: '[crewai]'
           - python: '3.12'
             extras: '[adk]'
+          - python: '3.12'
+            extras: '[openai-agents]'
     defaults:
       run:
         working-directory: python
