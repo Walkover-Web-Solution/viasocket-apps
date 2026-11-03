@@ -326,3 +326,15 @@ def test_crewai_tools():
     assert send.name == "slack_send-message"
     assert send.run(**INPUT) == '{"ok": true}'
     assert run_body(calls)["inputData"] == INPUT
+
+
+def test_a_failed_run_never_shows_the_script_id():
+    # The script_id is the credential that runs actions; an error reaches the model as tool text.
+    from viasocket._client import _shown_url
+
+    viasocket = ViaSocket("o", "p", "s", transport=lambda method, url, headers, body, timeout: (502, ""))
+    with pytest.raises(ViaSocketError) as error:
+        viasocket.run_action("scriSECRET123", "row5dxvkb0mr", {})
+    assert "scriSECRET123" not in str(error.value)
+    assert "/func/<script_id>" in str(error.value)
+    assert _shown_url("https://flow.sokt.io/func/scriSECRET123?x=1") == "https://flow.sokt.io/func/<script_id>?x=1"
