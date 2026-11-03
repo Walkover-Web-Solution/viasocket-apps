@@ -377,13 +377,44 @@ const agent = new Agent({
 })
 ```
 
+### OpenAI Agents SDK
+
+The same tools for the [OpenAI Agents SDK](https://openai.github.io/openai-agents-js/), as function tools.
+
+```sh
+npm install viasocket-apps @openai/agents
+```
+
+```js
+import { Agent, run } from '@openai/agents'
+import { ViaSocket } from 'viasocket-apps'
+import { viasocketTools } from 'viasocket-apps/openai-agents'
+
+const viasocket = new ViaSocket({
+  orgId: process.env.VIASOCKET_ORG_ID,
+  projectId: process.env.VIASOCKET_PROJECT_ID,
+  secret: process.env.VIASOCKET_EMBED_SECRET
+})
+
+const agent = new Agent({
+  name: 'Ops agent',
+  instructions: 'Keep the team updated in Slack.',
+  tools: await viasocketTools(viasocket, { user: 'user_123', apps: ['slack'], actions: { slack: ['send-message'] } })
+})
+const result = await run(agent, 'Post our Q3 numbers in #finance')
+```
+
+The SDK turns `-` in a tool name into `_`, so the tools are called `slack_send_message` and `slack_list_options`; an
+id field's description names the list-options tool the same way. The tools are not strict: an action's form has
+optional fields and open objects. Needs `@openai/agents` 0.1 or later. Python: `viasocket.openai_agents`.
+
 ### Python
 
-The same tools for Python agents (LangChain, CrewAI, LlamaIndex and Google ADK) are the PyPI package
+The same tools for Python agents (LangChain, CrewAI, LlamaIndex, Google ADK and the OpenAI Agents SDK) are the PyPI package
 [`viasocket`](https://pypi.org/project/viasocket/), from the same catalog and with the same names:
 
 ```sh
-pip install "viasocket[langchain]"     # or [crewai], [llamaindex], [adk]
+pip install "viasocket[langchain]"     # or [crewai], [llamaindex], [adk], [openai-agents]
 ```
 
 ```python

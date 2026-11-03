@@ -11,7 +11,7 @@ license = "MIT"
 authors = [{ name = "Walkover Web Solution" }]
 requires-python = ">=3.10"
 dependencies = []
-keywords = ["viasocket", "integrations", "ai-agent", "langchain", "crewai", "llamaindex", "google-adk", "tools", "slack", "google-sheets"]
+keywords = ["viasocket", "integrations", "ai-agent", "langchain", "crewai", "llamaindex", "google-adk", "openai-agents", "tools", "slack", "google-sheets"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: OS Independent",
@@ -22,6 +22,7 @@ langchain = ["langchain-core>=0.3"]
 crewai = ["crewai>=0.80"]
 llamaindex = ["llama-index-core>=0.12"]
 adk = ["google-adk>=1.10"]
+openai-agents = ["openai-agents>=0.1"]
 
 [project.urls]
 Homepage = "https://github.com/Walkover-Web-Solution/viasocket-apps/tree/main/python#readme"
