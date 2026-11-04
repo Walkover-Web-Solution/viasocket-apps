@@ -20,7 +20,6 @@ metadata:
   version: '2026-11-04.3'
 ---
 
-
 # viaSocket
 
 viaSocket is the place where apps, AI and people's products meet. Through it, anyone can use 2,300+ apps with the
