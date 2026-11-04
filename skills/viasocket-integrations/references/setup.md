@@ -1,10 +1,10 @@
-# viaSocket skill · setup
+# The product's keys
 
-> Part of the viaSocket skill: `https://viasocket.com/docs/skill.md`.
+Back to the skill: https://viasocket.com/docs/skill.md
 
-**Why:** every call the product makes is signed with these three values; one command puts them in place so the first real call happens minutes in, not after a dashboard tour.
-
-Once per project, before any code. The product needs three values in `.env`:
+Three values let the product act for each of its users: connect their apps, run their automations, talk to an AI for
+them. One command puts them in place, so the first real call happens minutes in, not after a dashboard tour. Once per
+project, before any code. The product needs the three in `.env`:
 
 | `.env` key               | Value                                                                     |
 | ------------------------ | ------------------------------------------------------------------------- |
@@ -12,7 +12,7 @@ Once per project, before any code. The product needs three values in `.env`:
 | `VIASOCKET_PROJECT_ID`   | the embed project id                                                      |
 | `VIASOCKET_EMBED_SECRET` | the signing secret. Server only: never in client code, a fixture or a log |
 
-If all three are already there (the prompt or the developer put them), skip to the check below.
+If all three are already there (the prompt or the person you work for put them), skip to "Check it works".
 
 ## One command, one click
 
@@ -22,14 +22,14 @@ Run it in the project folder (Node.js 20+, nothing to install):
 npx -y viasocket-apps setup
 ```
 
-It opens viaSocket's sign-in in the developer's browser and waits up to five minutes. Tell the developer:
+It opens viaSocket's sign-in in their browser and waits up to five minutes. Tell them:
 
 > Sign in to viaSocket in the tab that opened (or sign up), pick your company if it asks, and click **Allow**.
 
 When they click Allow, it:
 
-- writes `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET` and `VIASOCKET_AGENT_TOKEN` (the
-  developer's own token) into `.env`;
+- writes `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET` and `VIASOCKET_AGENT_TOKEN` (their own
+  token) into `.env`;
 - picks the embed project and prints it: the one already in `.env`, else the workspace's only embed, else a new one
   named after the folder (`--name <title>` names it). `--new` always makes a new one: one embed per product, so a
   second product in the same workspace gets its own;
@@ -37,27 +37,27 @@ When they click Allow, it:
 
 It changes no billing, no limits and no settings of an existing project.
 
-- **Exit 3** means the workspace has several embeds and it printed them: show the list to the developer, ask which
-  one is this product's, and run it again with `--project <id>`, or with `--new` when none is.
+- **Exit 3** means the workspace has several embeds and it printed them: show them the list, ask which one is this
+  product's, and run it again with `--project <id>`, or with `--new` when none is.
 - **Exit 1** means the sign-in did not arrive or a call failed: run it once more, then take the next section that
   fits.
 
-## Through the viaSocket MCP, when you cannot run a command
+## Through the viaSocket MCP server, when you cannot run a command
 
-The connector carries the developer's sign-in, so it finds the two ids itself; only the secret needs the developer.
+The connector carries their sign-in, so it finds the two ids itself; only the secret needs them.
 
 1. `get_org_details_by_token` answers `data.org.id`: that is `VIASOCKET_ORG_ID`.
 2. `list_embed_projects` with that `orgId` and `type: "embed"` answers `data.projects[]`. One project: its `id` is
-   `VIASOCKET_PROJECT_ID`. Several: ask the developer which one is this product's. None: create one as the tool's own
-   description says (the Create Embed Project endpoint, through `call_any_api_of_viasocket`), after the developer's
-   yes; one embed per product.
+   `VIASOCKET_PROJECT_ID`. Several: ask which one is this product's. None: create one as the tool's own description
+   says (the Create Embed Project endpoint, through `call_any_api_of_viasocket`), after their yes; one embed per
+   product.
 3. The secret is never read through the connector. Ask once, then wait:
 
 > Open https://flow.viasocket.com/embed-keys?project=<project id>, sign in if it asks, click **Copy**, and paste it
 > into <the exact place>. Tell me when done.
 
-`<the exact place>` is the project's `.env` or the builder's secret settings, named the way the developer sees them.
-The page copies all three lines; the two ids in it are the ones you found.
+`<the exact place>` is the project's `.env` or the builder's secret settings, named the way they see them. The page
+copies all three lines; the two ids in it are the ones you found.
 
 Put the two ids where the product keeps its environment yourself, under the names above.
 
@@ -94,8 +94,8 @@ A list (empty until someone connects) means setup is right; a 401 means the secr
 
 A call failing with `host_not_allowed` means a blocked host: ask once to allow `viasocket.com`, `registry.npmjs.org`,
 `flow.viasocket.com`, `flow-api.viasocket.com`, `flow.sokt.io`, `plug-service.viasocket.com`, `connect.viasocket.com`,
-`mcp.viasocket.com`, `memory-api.viasocket.com` and `app.docstar.io`; until then, ask the developer to run each request and paste the
-response. Only `serviceIdFor` and the catalog list use `plug-service.viasocket.com`: while it is blocked, every app's
-page gives its `service_id`, so the rest can be tested; the product's server still calls `serviceIdFor`.
+`mcp.viasocket.com`, `memory-api.viasocket.com` and `app.docstar.io`; until then, ask them to run each request and
+paste the response. Only `serviceIdFor` and the catalog list use `plug-service.viasocket.com`: while it is blocked,
+every app's page gives its `service_id`, so the rest can be tested; the product's server still calls `serviceIdFor`.
 
 END OF PAGE

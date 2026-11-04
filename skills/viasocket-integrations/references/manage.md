@@ -1,8 +1,9 @@
-# viaSocket skill · manage what a user has
+# Manage what a user has
 
-> Part of the viaSocket skill: `https://viasocket.com/docs/skill.md`.
+Back to the skill: https://viasocket.com/docs/skill.md
 
-**Why:** a user's connections and flows are theirs; the product shows and revokes them so trust holds, and reconnects in place so nothing built on them is lost.
+A user's connections and flows are theirs. The product shows them, lets the user disconnect an app or pause a flow,
+and reconnects an expired app in place so nothing built on it is lost. One call each, per user:
 
 Functions of `https://viasocket.com/docs/apps-api.md`:
 

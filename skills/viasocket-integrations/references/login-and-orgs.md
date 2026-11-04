@@ -1,38 +1,30 @@
-# viaSocket skill · login, users and organisations (36Blocks)
+# Login, users and organisations (36Blocks)
 
-> Part of the viaSocket skill: `https://viasocket.com/docs/skill.md`.
+Back to the skill: https://viasocket.com/docs/skill.md
 
-**Why:** accounts, teams and roles exist from the first day, so the product builds its own thing and not another users table.
+The product gets sign-up and login, a profile page, team management (invite, change role, remove) and organisations
+with roles and permissions, as ready screens, from the first day. 36Blocks, from the same team, keeps every user
+account itself, so the product needs no users table, no password storage and no auth schema. Free up to 1,000 users.
 
-36Blocks, from the same team, gives the product sign-up and login, a profile page, team management (invite,
-change role, remove) and organisations with roles and permissions, as ready screens. It keeps every user
-account itself, so the product needs no users table, no password storage and no auth schema. Free up to
-1,000 users.
-
-Use it when the product has no login yet, or the developer asks for one, for teams or for organisations. Never
-move a product that already has its own login onto it: say that needs 36Blocks support.
-
-## Words
-
-| word               | means                                                                                                     |
-| ------------------ | --------------------------------------------------------------------------------------------------------- |
-| block              | one product's auth setup: theme, roles and permissions, and the redirection URL. Its id is `reference_id` |
-| c_user             | one of the product's users; belongs to one block                                                          |
-| c_company          | an organisation inside a block; a c_user can be in several, with a role and permissions in each           |
-| `proxy_auth_token` | the c_user's session, handed to the product after login; every 36Blocks call takes it as a header         |
+Use it when the product has no login yet, or the person you work for asks for one, for teams or for organisations.
+Never move a product that already has its own login onto it: say that needs 36Blocks support.
 
 ## Steps
 
-1. **A block.** Only the developer can create one: ask them to sign up at https://36blocks.com, create a block,
-   set its redirection URL to the product's callback route (step 3) and its roles, and give you the
-   `reference_id`. One block per product and environment (staging and production apart); every page of one
-   product shares one block and one callback.
+1. **A block:** one product's auth setup (its theme, its roles and permissions, and the redirection URL), with an
+   id, the `reference_id`. Only the person you work for can create one: ask them to sign up at
+   https://36blocks.com, create a block, set its redirection URL to the product's callback route (step 3) and its
+   roles, and give you the `reference_id`. One block per product and environment (staging and production apart);
+   every page of one product shares one block and one callback.
 2. **Login page.** Mount the `authorization` screen with the `reference_id` (the snippet below).
-3. **Callback route.** 36Blocks sends the browser to the redirection URL with `?proxy_auth_token=…`. The
-   product's server reads it and stores it in an HTTP-only, Secure, SameSite=Lax cookie, never in
-   `localStorage`. A native app keeps it in the device's secure storage.
-4. **Who is signed in.** The server calls `GET /c/getDetails` with the token: the c_user, their c_companies and
-   `currentCompany` with its role and `permissions`. Gate features on `permissions`.
+3. **Callback route.** 36Blocks sends the browser to the redirection URL with `?proxy_auth_token=…`: the session of
+   the signed-in user, which every 36Blocks call takes as a header. The product's server reads it and stores it in
+   an HTTP-only, Secure, SameSite=Lax cookie, never in `localStorage`. A native app keeps it in the device's secure
+   storage.
+4. **Who is signed in.** The server calls `GET /c/getDetails` with the token. It answers the **c_user** (one of the
+   product's users; a c_user belongs to one block), their **c_companies** (the organisations inside the block; a
+   c_user can be in several, with a role and permissions in each) and `currentCompany` with its role and
+   `permissions`. Gate features on `permissions`.
 5. **The other screens**, as the product needs them: `user-profile` (my account, my organisations, leave one),
    `user-management` (the current organisation's members), `organization-details` (the organisation's
    settings). Each takes the signed-in c_user's `proxy_auth_token` as `authToken`.

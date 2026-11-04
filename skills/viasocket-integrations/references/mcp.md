@@ -1,17 +1,19 @@
-# viaSocket skill · MCP servers
+# MCP servers
 
-> Part of the viaSocket skill: `https://viasocket.com/docs/skill.md`.
+Part of the viaSocket skill: https://viasocket.com/docs/skill.md.
 
-**Why:** with an MCP URL, what is built in the product becomes a tool for every AI client and every other product's
-agent, so work can start in Claude, ChatGPT, Cursor or another agent and finish inside the product. Without it the
-product is a destination only a human can reach.
+The person you work for wants their product usable from Claude, ChatGPT, Cursor or any other agent: a user asks
+their AI to do something, and it happens inside the product. That takes an MCP server, one web address an AI client
+adds to get a set of tools. viaSocket hosts it, with the product's name, its sign-in, its instructions and its
+ready-made prompts; the product hosts only the API it already has, and work that starts in any agent finishes
+inside the product.
 
 Two kinds, and a product can have both:
 
-| kind                     | what it is                                                                                                            | who makes it                        | read                             |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------------- |
-| the product's own server | the product's API as tools: one URL for every user, each signed in with the product's login                           | the developer, once, with a command | sections 1 and 2 below           |
-| users' MCP servers       | servers a user makes for an agent or AI product they build inside the product, with the tools they pick; theirs alone | the product's code, for each user   | "Users' MCP servers", at the end |
+| kind                     | what it is                                                                                                            | who makes it                                       | read                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------- |
+| the product's own server | the product's API as tools: one URL for every user, each signed in with the product's login                           | you, once, with a command, in the person's account | sections 1 and 2 below           |
+| users' MCP servers       | servers a user makes for an agent or AI product they build inside the product, with the tools they pick; theirs alone | the product's code, for each user                  | "Users' MCP servers", at the end |
 
 Which one:
 
@@ -35,10 +37,9 @@ updates it, keeps the ids of what it made, and tests the URL:
 npx -y viasocket-apps mcp
 ```
 
-It signs the developer in when `.env` has no `VIASOCKET_AGENT_TOKEN` (the same one click as the setup command; tell
-the developer: "Sign in to viaSocket in the tab that opened (or sign up), pick your company if it asks, and click
-**Allow**"), mints
-`VIASOCKET_MCP_TOKEN` from it and keeps it in `.env`, and never prints a secret. Signed in through the viaSocket MCP
+It signs them in when `.env` has no `VIASOCKET_AGENT_TOKEN` (the same one click as the setup command; tell them:
+"Sign in to viaSocket in the tab that opened (or sign up), pick your company if it asks, and click **Allow**"),
+mints `VIASOCKET_MCP_TOKEN` from it and keeps it in `.env`, and never prints a secret. Signed in through the viaSocket MCP
 server instead: mint the token with its `call_any_read_api_of_viasocket` tool (`GET
 https://flow-api.viasocket.com/mcp/agent-token`, `Authorization` empty), write `data.token` to `.env` as
 `VIASOCKET_MCP_TOKEN` without echoing it, and run the command: it uses that token while it works (24 hours). The
@@ -46,9 +47,8 @@ connector cannot call `mcp.viasocket.com` itself.
 
 ## 1. Decide, then get a yes
 
-The plan opens as the skill's "Talking to the developer" says: the ask and what the product's users will be able to
-do from Claude or ChatGPT, in three plain lines. Below them, these decisions, for whoever reads on; wait for the yes
-before the command runs.
+The plan, as the skill's "The person you work for" says: what the product's users will be able to do from Claude or
+ChatGPT. Below its three lines, these decisions, for whoever reads on. The command runs only after the yes.
 
 ### The tools
 
@@ -172,7 +172,7 @@ calls them and nothing else changes for its users:
 
    - `login.mode` is `none`, `api-key` or `oauth`. For `oauth` add `loginUrl` (the product's authorize endpoint),
      `tokenUrl` (must accept a JSON body), `clientId` and `"clientSecret": "${TASKPAD_OAUTH_SECRET}"`, from an OAuth
-     app registered in the product; then the developer registers the redirect URI
+     app registered in the product; then the product's owner registers the redirect URI
      `https://mcp.viasocket.com/oauth/<server id>/callback` in that app (the id is in the ids file). `"when": "needed"` makes an OAuth server open to connect, with the sign-in asked only when a tool's API answers 401.
    - `api.url` and `api.headers` take `{{argument}}` placeholders; a GET sends the other arguments as the query
      string, the other methods as the JSON body (`"queryParams": ["page"]` moves some to the query string).
@@ -191,11 +191,11 @@ calls them and nothing else changes for its users:
    `--token <a token the validationUrl accepts>` on a login server (a key, or a token the product issued for a test
    user: with a password login, sign in as a test user through the product's own login endpoint, such as
    `POST /auth/login`, and pass the token it answers). The answer is what the product's API returned; a tool that fails answers with a text that starts with
-   `Error:`. For the product's OAuth, ask the developer to add the URL to Claude or Cursor once, sign in, and call
-   each tool. A tool that was never called is UNTESTED.
+   `Error:`. For the product's OAuth, ask them to add the URL to Claude or Cursor once, sign in, and call each tool.
+   A tool that was never called is UNTESTED.
 
 4. **A custom domain**, when wanted: `PUT https://mcp.viasocket.com/api/mcp/<server id>/domain` with `{ "domain" }`
-   and `Authorization: Bearer <VIASOCKET_MCP_TOKEN>`; it answers the DNS records the developer adds and goes
+   and `Authorization: Bearer <VIASOCKET_MCP_TOKEN>`; it answers the DNS records the product's owner adds and goes
    `pending_dns` → `issuing_cert` → `active` on its own (an hour at most). Everything else the management API can do
    is in `https://mcp.viasocket.com/api-reference.md`; the command covers what a product needs.
 
@@ -213,14 +213,14 @@ calls them and nothing else changes for its users:
 
 ## 3. A code tool for the rest of the API
 
-**Why:** a tool per endpoint is best for the few jobs users do most, but a large API would need dozens, and every
-tool's description sits in the AI's context on every turn. One `run_code` tool covers the rest: the AI writes a
-short JavaScript that calls any endpoint, chains several calls and returns only what is needed. A viaSocket flow
-runs that code, so the product hosts nothing new.
+A tool per endpoint is best for the few jobs users do most, but a large API would need dozens, and every tool's
+description sits in the AI's context on every turn. One `run_code` tool covers the rest: the AI writes a short
+JavaScript that calls any endpoint, chains several calls and returns only what is needed. A viaSocket flow runs
+that code, so the product hosts nothing new.
 
 How it works:
 
-- A flow in the developer's viaSocket account, with a webhook trigger and one step. The step checks the caller, then
+- A flow in the person's own viaSocket account, with a webhook trigger and one step. The step checks the caller, then
   runs the code it was sent with two things in reach: `api()`, which calls the product's API as the signed-in user,
   and `input`.
 - The MCP server's `run_code` tool posts to that webhook. The AI client's token reaches the flow as it reaches any
@@ -353,13 +353,13 @@ What the tool answers:
 Limits:
 
 - **25 seconds:** the tool call ends at 30, and the webhook answers only when the run ends, so longer code fails.
-- **Each call is a flow run** in the developer's viaSocket account and counts on its plan.
+- **Each call is a flow run** in the person's own viaSocket account and counts on its plan.
 - **The code acts as the user:** it can do whatever their token allows and send what it reads anywhere with `fetch`,
   like any code an AI writes. Offer it only on a server with a login. To keep some endpoints out (admin, key
   minting), refuse their paths in `api()`.
 - **It is not a hard sandbox:** the code runs in the same JavaScript as the step, so the step holds nothing the user
   may not have. Each run starts afresh, so one run's code cannot reach the next run's.
-- **The flow's history** keeps each run's input and result, which members of the developer's viaSocket workspace can
+- **The flow's history** keeps each run's input and result, which the members of the person's viaSocket account can
   open.
 
 ## Finished when: the product's own server
@@ -386,9 +386,9 @@ tool: the flow's `script_id`, where the key is kept, its skill, and its test.
 
 ## Users' MCP servers
 
-**Why:** when a product lets its users build agents or AI products, each needs tools an AI client can reach. Here a
-user makes MCP servers of their own inside the product and takes them to Claude, ChatGPT, Cursor or another agent; the
-product runs no MCP server, and no user sees another's.
+A product that lets its users build agents or AI products gives each user MCP servers of their own: made inside the
+product, with the tools the user picks, and taken to Claude, ChatGPT, Cursor or another agent. The product runs no
+MCP server, and no user sees another's.
 
 How it works:
 

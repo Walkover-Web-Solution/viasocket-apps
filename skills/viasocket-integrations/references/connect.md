@@ -1,16 +1,19 @@
-# viaSocket skill · connection setup
+# Connecting a user's app
 
-> Part of the viaSocket skill: `https://viasocket.com/docs/skill.md`. Every function named here (`findEnabledApp`, `runAction`, …) is defined in
-> `https://viasocket.com/docs/apps-api.md`: copy its module once.
+Back to the skill: https://viasocket.com/docs/skill.md
 
-**Why:** the user brings their own apps and the product never holds an OAuth or a token; viaSocket keeps the connection alive and the product keeps one `auth_id`.
+A user connects one of their apps once, from the product's own screen, and the product never holds an OAuth or a
+token: viaSocket keeps the connection alive. What the product keeps is the `auth_id` the connection answers, one per
+user and app, stored on the server. An app without sign-in has no Connect button: its `auth_id` is `NoAuth`.
 
-A user connects one of their apps once, from the product's own screen; the result is an `auth_id`, stored per
-user and app on the server. An app without sign-in has no Connect button: its `auth_id` is `NoAuth`.
+Every function named here (`findEnabledApp`, `runAction`, …) is defined in https://viasocket.com/docs/apps-api.md:
+copy its module once.
 
 ## 1. The token endpoint (server)
 
-The browser gets its embed token only from here, behind the product's login:
+The browser needs an embed token: signed with `VIASOCKET_EMBED_SECRET` per user, on the server, it is the one value
+the browser may hold, for the Connect popup and the prebuilt UI. The browser gets it only from here, behind the
+product's login:
 
 ```js
 app.get('/api/viasocket/token', requireLogin, async (req, res) => {
@@ -53,6 +56,12 @@ It shows the app's icon and name.
 
 The popup opens from the click itself, before any `await`: fetch the token on page load.
 
+## 3. Right after Connect
+
+Some apps need one choice per user before any action makes sense: their site, property, workspace or board. The
+app's page lists them in its **Pickers** table. Make that choice part of connecting and store it with the `auth_id`.
+The rule and the code: actions-and-events.md, "Once, or per run".
+
 ## Rules
 
 - Only `openViasocketConnection` opens the popup: a hand-built
@@ -67,12 +76,6 @@ The popup opens from the click itself, before any `await`: fetch the token on pa
 - Only the Connect popup takes a `service_id`: `serviceIdFor(userId, slug)` reads it from the app's
   listing. Every other call takes the slug itself. An unknown slug is a 404 to report, not to retry.
 - Never pass an app's display name as a slug, and never pass a `service_id` with anything appended to it.
-
-## 3. Right after Connect
-
-Some apps need one choice per user before any action makes sense: their site, property, workspace or board. The
-app's page lists them in its **Pickers** table. Make that choice part of connecting and store it with the `auth_id`.
-The rule and the code: actions-and-events.md, "Once, or per run".
 
 Next, use the connection: actions-and-events.md.
 

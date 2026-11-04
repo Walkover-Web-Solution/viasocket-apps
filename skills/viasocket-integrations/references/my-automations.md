@@ -1,23 +1,34 @@
-# viaSocket skill · the developer's own automations
+# In their own apps: one action now, or a workflow
 
-> Part of the viaSocket skill: `https://viasocket.com/docs/skill.md`.
+Part of the viaSocket skill: https://viasocket.com/docs/skill.md.
 
-**Why:** the developer's own work automated in their own workspace, by the same agent that builds their product, with nothing saved before they say yes.
+The person you work for wants something done in their own apps: a message in their Slack now, a row in their sheet,
+or a workflow that does it for them every morning, on every new lead, or whenever their own code calls. viaSocket
+does it on their own account, through the apps they have connected: the sign-in to each app, the tokens and each
+app's quirks are already handled, and every run is kept in their history, under Automations at
+https://flow.viasocket.com.
 
-Build or edit a flow in the developer's own viaSocket workspace: one trigger (an app event, a schedule, a webhook) and
-ordered JavaScript steps that call actions in the apps they have connected. viaSocket runs it and keeps its history; the
-developer sees it under Automations at https://flow.viasocket.com. This is not the product's automation (that is
-`https://viasocket.com/docs/automations.md`, run per end user from the product's code): here the developer
-is the user and there is no product.
+This page does two things:
 
-Needs a way in first: `agent-access.md`.
+- **One action, once** (Run Action Once): it runs now on their account, and the work ends there. Read "The calls",
+  then "One action now".
+- **A workflow**, which the calls name a flow: one trigger (an app's event, a schedule, or a web address their own
+  code calls) and ordered JavaScript steps that call actions in their apps. viaSocket runs it and keeps its history.
+  Read "The calls", then "Building a workflow".
+
+Automations a product runs for each of its users are not this page: that is
+https://viasocket.com/docs/automations.md. Here there is no product: the person is the user, and the work lives in
+their own account.
+
+Their account must be signed in first, as the skill's "Sign in" says, and the check of
+agent-access.md must pass.
 
 ## The calls
 
 Thirteen functions, all `POST https://flow.sokt.io/func/<id>` with `Content-Type: application/json`, the JSON body
 shown, and `Authorization: <VIASOCKET_AGENT_TOKEN>` (through the MCP: `call_any_api_of_viasocket`, `method: "POST"`,
 `Authorization` empty). A refused call still answers HTTP 200: the refusal is in the body (`success: false`, or
-`error`). Reads change nothing; writes need the developer's yes.
+`error`). Reads change nothing; writes need their yes.
 
 | call                   | id             | body                                                                                                                                                                                                                        | kind                            | returns                                                                                                                  |
 | ---------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -42,28 +53,50 @@ Field docs and samples: `https://app.docstar.io/p/automations/llms.txt?collectio
 `https://app.docstar.io/p/app-catalog-and-connections/llms.txt?collectionId=eInXd9-ETenX` (each endpoint links its
 `.openapi.yml`). Fetch raw.
 
-## The order
+**An empty answer is not proof.** Every call answers HTTP 200: a missing or wrong token gives `{ "flows": [] }`,
+`{ "error": {} }` or `null`, and List Actions sent `service_id` instead of `serviceId` gives `{ "actions": [] }`.
+Before you conclude there is nothing, run the agent-access check and confirm the id and its key spelling came from
+the right list call (`serviceId` for List Actions, `service_id` for List Triggers).
 
-1. **List Flows first,** after the check of agent-access.md passed: a
-   missing or wrong token also answers `{ "flows": [] }`. A flow that already does the job, or a request that is really an edit, goes to that flow
-   (Get Flow, then change it); never a second flow for the same automation.
-2. **Each app the developer names:** Search Services → `service_id`; then List Triggers or List Actions, to be sure it
-   can do the job before anyone signs in to anything. No match → report `kind: missing_capability`, `source: plug`,
-   `refs.app`, and tell the developer.
-3. **Confirm the plan** as the skill's "Talking to the developer" says: the ask, then what starts it and what
-   happens, in plain words, in three lines. The developer learns what they are signing in for before any app asks.
+Never put the agent token in a step, an `inputData` or a log.
+
+## One action now
+
+"Post this in my Slack", "add this to my sheet": one action, run once, on their own account.
+
+1. **The app and the action:** Search Services with the app's name → `service_id`; List Actions → `action_id`. No
+   match → report `kind: missing_capability`, `source: plug`, `refs.app`, and tell them.
+2. **Their connection:** List Connections and match on `service_id` → `auth_id`. Several accounts for one app → ask
+   which. None → Create Connection Link with the `service_ids`, give them the `connection_url`, wait until they say
+   they signed in, List Connections again. Nothing runs until the `auth_id` is there.
+3. **Say exactly what it will do, and wait for their yes.** Run Action Once runs a real action on their real account:
+   it sends the message, it adds the row.
+4. **Run Action Once** with `instructions` in plain words (what to do and where: the channel, the sheet, the label)
+   and a `thread_id`. Tell them what happened, from the action's result.
+
+## Building a workflow
+
+1. **List Flows first,** after the check of agent-access.md passed: a missing or
+   wrong token also answers `{ "flows": [] }`. A flow that already does the job, or a request that is really an edit,
+   goes to that flow (Get Flow, then change it); never a second flow for the same automation.
+2. **Each app they name:** Search Services → `service_id`; then List Triggers or List Actions, to be sure it can do
+   the job before anyone signs in to anything. No match → report `kind: missing_capability`, `source: plug`,
+   `refs.app`, and tell them.
+3. **The plan, then their yes,** as the skill's "The person you work for" says: what starts the workflow and what
+   happens, before any app asks them to sign in.
 4. **Connections:** List Connections and match on `service_id` → `auth_id`. Several accounts for one app → ask which.
-   None → Create Connection Link with the `service_ids`, give the developer each `connection_url`, one per message,
-   wait until they say they signed in, List Connections again. Don't build on until the `auth_id` is there. Then
-   Create Empty Flow once and keep `script_id`.
+   None → Create Connection Link with the `service_ids`, give them each `connection_url`, one per message, wait until
+   they say they signed in, List Connections again. Don't build on until the `auth_id` is there. Then Create Empty
+   Flow once and keep `script_id`.
 5. **The trigger.** An app event: Build Trigger Input (`instructions` naming the channel, sheet, label in plain words;
    it resolves the ids itself) → Save Trigger with `triggerType: "plugin"`, `trigger_id`, `auth_id` and the returned
    `inputData` verbatim. A schedule: Save Trigger with `triggerType: "cron"` and `cronStatement` (five-field cron or
-   plain words; unreadable text is refused). A webhook: Save Trigger with `triggerType: "webhook"` only; the flow then
-   runs on each `POST https://flow.sokt.io/func/<script_id>` and the caller gets the last step's return value.
-   Anyone with that address can run the flow, so the product keeps it on its server and sends a key of its own in a
-   header (`X-Flow-Key`, a long random value in the product's `.env`). A step's return does not stop the steps after
-   it, so a first step only checks the key, and every later step that acts goes on only when it passed:
+   plain words; unreadable text is refused). A call from their own code, a webhook: Save Trigger with
+   `triggerType: "webhook"` only; the flow then runs on each `POST https://flow.sokt.io/func/<script_id>` and the
+   caller gets the last step's return value. Anyone with that address can run the flow, so the product keeps it on
+   its server and sends a key of its own in a header (`X-Flow-Key`, a long random value in the product's `.env`). A
+   step's return does not stop the steps after it, so a first step only checks the key, and every later step that
+   acts goes on only when it passed:
 
    ```js
    // the first step, named check_key
@@ -72,17 +105,25 @@ Field docs and samples: `https://app.docstar.io/p/automations/llms.txt?collectio
    if (!context?.res?.check_key?.ok) return { skipped: 'refused' }
    ```
 
-   The values the caller sends are at `context.req.body`; name them in Build Action Input's `instructions` ("the order id from the request")
-   and read them by that path in the step.
+   The values the caller sends are at `context.req.body`; name them in Build Action Input's `instructions` ("the
+   order id from the request") and read them by that path in the step.
 
 6. **The steps.** For each app action: Build Action Input → its `inputData` goes into the step's code; then Save Steps
    with `scriptId` and the **whole** `steps` array: `stepname`, `code`, `service_action_functions: [{ name, auth_id,
 action_id }]` (one per action the code calls; `name` is the exact action name; `[]` for a step that only decides or
    transforms).
-7. **Run it once** if the developer agrees (POST the webhook, cause the event, or wait for the schedule), and tell
-   them the flow is in their viaSocket account, what it does and how to pause it (Automations → the flow).
+7. **Run it once** if they agree (POST the webhook, cause the event, or wait for the schedule), and tell them the
+   flow is in their viaSocket account, what it does, and how to pause it (under Automations at
+   https://flow.viasocket.com, open the flow).
 
 **Edit** = Get Flow → change → Save Steps with every step. A step left out is deleted.
+
+Before Create Empty Flow, Save Trigger and Save Steps, say what will be saved and wait for the yes. The reads and the
+two Build calls need no confirmation.
+
+While building a workflow, Run Action Once is not a way to resolve names: Build Trigger Input and Build Action Input
+already resolve names to ids. Only when they can't, offer it, say exactly what it will do (it runs a real action on
+their real account), and call it after a yes.
 
 ## Step code
 
@@ -115,23 +156,13 @@ console.log('### Posted to #news: ' + (sent?.ts || 'no ts'))
 return sent
 ```
 
-## Rules
-
-- Confirm before Create Empty Flow, Save Trigger and Save Steps: say what will be saved. The reads and the two Build
-  calls need no confirmation.
-- **Run Action Once runs a real action on the developer's real account** (sends the message, adds the row). Never on
-  your own: Build Trigger Input and Build Action Input already resolve names to ids. Only when they can't, offer it,
-  say exactly what it will do, and call it after a yes.
-- Never put the agent token in a step, an `inputData` or a log.
-- **An empty answer is not proof.** Every call answers HTTP 200: a missing or wrong token gives `{ "flows": [] }`,
-  `{ "error": {} }` or `null`, and List Actions sent `service_id` instead of `serviceId` gives `{ "actions": [] }`.
-  Before you conclude there is nothing, run the agent-access check and confirm the id and its key spelling came from
-  the right list call (`serviceId` for List Actions, `service_id` for List Triggers).
-
 ## Finished when
 
-The flow exists in the developer's viaSocket account with the trigger and every step saved, each connection it uses
-is theirs, it ran once (or the developer declined the run), and the report names the flow and what each step does.
-Nothing was created twice, and nothing was saved before the developer said yes.
+One action: it ran once, after their yes, on their own connection, and the report says what it did and what the
+action answered.
+
+A workflow: the flow exists in their viaSocket account with the trigger and every step saved, each connection it uses
+is theirs, it ran once (or they declined the run), and the report names the flow and what each step does. Nothing
+was created twice, and nothing was saved before they said yes.
 
 END OF PAGE

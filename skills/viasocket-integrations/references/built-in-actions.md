@@ -1,11 +1,12 @@
-# viaSocket skill · built-in actions
+# Built-in actions
 
-> Part of the viaSocket skill: `https://viasocket.com/docs/skill.md`.
+Back to the skill: https://viasocket.com/docs/skill.md
 
-**Why:** an AI call, a wait or a small memory as one step, on the same key, so the product needs no second service for them.
+An AI call, a wait or a small memory as one step of a flow, on the same keys, so the product needs no second service
+for them. The live page lists every built-in plug with its actions, generated from the catalog; in the package,
+`viasocket.catalog.listBuiltIn()` lists the same.
 
-This page is generated from the live catalog: every built-in plug, with its actions. In the package,
-`viasocket.catalog.listBuiltIn()` lists the same. If you are reading an installed copy, fetch
-`https://viasocket.com/docs/skill/built-in-actions.md` instead: that one has the actions.
+If you are reading an installed copy, fetch https://viasocket.com/docs/skill/built-in-actions.md instead: that one
+has the actions.
 
 END OF PAGE

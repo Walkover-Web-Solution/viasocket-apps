@@ -1,13 +1,15 @@
-# viaSocket skill · actions, options and events
+# Actions, options and events
 
-> Part of the viaSocket skill: `https://viasocket.com/docs/skill.md`. Every function named here (`findEnabledApp`, `runAction`, …) is defined in
-> `https://viasocket.com/docs/apps-api.md`: copy its module once.
+Back to the skill: https://viasocket.com/docs/skill.md
 
-**Why:** this is where the product acts in its users' apps and hears from them; every key decided right here is a question the user is never asked twice, or an action that never fails on a guessed value.
-
-With the user's `auth_id` (connect.md) the product reads options from their account, runs the app's
-actions and reacts to its events. Code names the app by its **slug** (`gmail`), an action or trigger by its **key**
+Here the product acts in its users' apps and hears from them. With the user's `auth_id`
+(connect.md) it reads options from their account, runs the app's actions and reacts
+to its events. Every key decided on this page is a question the user is never asked twice, or an action that never
+fails on a guessed value. Code names the app by its **slug** (`gmail`), an action or trigger by its **key**
 (`Send_Email`) and a version by its number (`v55`): no row id is ever copied into code.
+
+Every function named here (`findEnabledApp`, `runAction`, …) is defined in https://viasocket.com/docs/apps-api.md:
+copy its module once.
 
 ## Find what to call
 
@@ -88,7 +90,8 @@ enabled again.
   and fill the key from it on every run. The app's page has a **Pickers** table for exactly this: for each such key,
   the event and `fieldKey` that list it before any action is chosen (`Get_Site` lists `siteUrl` for Search Console).
   A value that changes with the run (a message, a row, a date range, a recipient) is chosen in the action's own form
-  or filled by the product. Say which in the plan table of app-integrations.md; the developer confirms it.
+  or filled by the product. Say which in the plan table of app-integrations.md; the person you work for
+  confirms it.
 
 ## Options
 
@@ -167,7 +170,7 @@ return out`
   the same write that records the subscribe call's result: the flow list returns neither `inputData` nor the handler,
   so this record is the only copy.
 - A polled trigger takes `scheduledTime` (minutes, as a string) in `inputData`.
-- `{ webhook: url }` instead of `{ code }` only when the developer asks for exactly that.
+- `{ webhook: url }` instead of `{ code }` only when the person you work for asks for exactly that.
 
 ## When it goes wrong
 
