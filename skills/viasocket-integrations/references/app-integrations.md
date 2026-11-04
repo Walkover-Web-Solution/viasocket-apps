@@ -39,7 +39,7 @@ viaSocket keeps each connection alive, and the product keeps one id per user and
    | the product needs to…                                                                                                                                                                                                                        | read                                                                |
    | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
    | let a user connect an app and store the `auth_id` it answers: that user's connection to that app, kept per user and app                                                                                                                      | connect.md                         |
-   | read options from a connected app and run its actions. Enabling the app, once per user and app, creates the flow that runs them; its id, the `script_id`, stays on the server                                                                | actions-and-events.md              |
+   | read options from a connected app and run its actions. Enabling the app, once per user and app, creates the flow that runs them; its id, the `script_id`, is a credential kept on the server, per user                                                                | actions-and-events.md              |
    | react to the app's events (each one thing the trigger reports, as the product receives it): a subscription switches a trigger on for a user, with a handler, code that runs on viaSocket when an event arrives, and a `script_id` of its own | actions-and-events.md              |
    | show every app and any action's form in its own screens                                                                                                                                                                                      | https://viasocket.com/docs/catalog-api.md                           |
    | let users build their own workflows in viaSocket's screens                                                                                                                                                                                   | https://viasocket.com/docs/embed.md                                 |
@@ -66,9 +66,10 @@ every line apply to each action and trigger in play, even when the person you wo
   it: the user on screen (once after Connect, or per run), the product's data or AI per run, or a constant only
   when it is right for every user.
 - **Who picks the action:** the product's code, the user from a list, or the product's AI from tool definitions.
-- **Where it runs:** actions from the server; events through a handler on viaSocket, its record saved; the browser
-  holds only the embed token (signed with `VIASOCKET_EMBED_SECRET` per user on the server), for the Connect popup and
-  the prebuilt UI.
+- **Where it runs:** actions from the server, each `script_id` used only for the user who owns it and that
+  ownership checked on the server; events through a handler on viaSocket, its record saved; the browser holds only
+  the embed token (signed with `VIASOCKET_EMBED_SECRET` per user on the server), for the Connect popup and the
+  prebuilt UI.
 - **Tested:** each action ran once on the test connection and each subscription saw a real event. Anything that did
   not is listed as **UNTESTED** with why.
 - **Proof:** the check script's output and one real call's response.

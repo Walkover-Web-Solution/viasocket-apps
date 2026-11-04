@@ -17,16 +17,19 @@ compatibility: >-
   reference). Any language; the viasocket-apps package runs on Node 20+, Bun, Deno and edge runtimes.
 metadata:
   author: viaSocket
-  version: '2026-11-04.2'
+  version: '2026-11-04.3'
 ---
+
 
 # viaSocket
 
-viaSocket is the place where apps, AI and people's products meet. Through it, anyone can reach 2,300+ apps with the
-sign-in, the tokens, the webhooks and each app's quirks already handled; run workflows that wake on a schedule, an
-event or a call; talk to any AI model and give it memory and tools; give a product accounts, teams and
-organisations; and make a product itself a tool that Claude, ChatGPT and other agents use. Nothing of that has to be
-built or hosted by the person asking: viaSocket runs it, bills it and keeps its history.
+viaSocket is the place where apps, AI and people's products meet. Through it, anyone can use 2,300+ apps with the
+sign-in, the tokens, the webhooks and each app's quirks already handled: for one task now, or for a workflow that
+wakes on a schedule, an event or a call. The same power goes inside their own product: its users connect their own
+apps there, and each user gets automations of their own, like a summary every morning at 9. It also talks to any AI
+model and gives it memory and tools, gives a product accounts, teams and organisations, and makes a product itself a
+tool that Claude, ChatGPT and other agents use. Nothing of that has to be built or hosted by the person asking:
+viaSocket runs it, bills it and keeps its history.
 
 Someone pasted this skill because they want one of those things. Read what they asked for, find it below, open that
 page and follow it whole. Every page says exactly which calls to make and what each answers.
@@ -169,8 +172,10 @@ the package's calls.
 
 ## On every job
 
-- **Secrets stay on the server:** every key, token and id viaSocket gives. Never in client code, a committed file, a
-  tool definition or a log. The one value a browser may hold is the per-user embed token, where a page says so.
+- **Secrets stay on the server:** every key, token and id viaSocket gives. A `script_id` is one of them: whoever
+  holds it runs that user's app with no token. Never in client code, a URL, a committed file, a tool definition or a
+  log, and one user's ids are used only on that user's own requests. The one value a browser may hold is the per-user
+  embed token, where a page says so.
 - **Plan, then a yes, then code.** Wait for the yes and apply what they changed; a yes with changes is a yes.
 - **Test on a real account** before building on a call. Anything that never ran is listed as **UNTESTED** in the
   report, with why, and is never deployed, switched on or called done. An action that writes or sends is tested on
@@ -192,6 +197,6 @@ End with: what was built; each line of the page's "Finished when", where it has 
 marked `VIASOCKET-PENDING` and why; one real call's response; what was reported to viaSocket; and anything left for
 them (a value only they know, a sign-in only they can do).
 
-Skill version `2026-11-04.2`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
+Skill version `2026-11-04.3`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
 
 END OF PAGE

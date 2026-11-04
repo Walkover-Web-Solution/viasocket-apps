@@ -34,8 +34,13 @@ The action's page tags some keys of `inputData`:
 ## The order
 
 Enabling an app creates one flow (its `script_id`) per user and app that runs any of that app's actions; do it once,
-store the `script_id`, and run every action through it. Each id comes from the step before it. Keep on the server: the `auth_id` and the enabled app's `script_id` per user
-and app, and each subscription's `script_id`.
+store the `script_id`, and run every action through it. Each id comes from the step before it.
+
+A `script_id` is a credential. Running an action through it needs no token: the id alone acts as that user on that
+app, which is why the server sends no embed token at run time. So the `auth_id`, the enabled app's `script_id` and
+each subscription's `script_id` are stored on the server per user and app, like a password: never in the browser, a
+URL, a log or client code, and never handed to another user. Before running an action, the product's endpoint checks
+that the signed-in user owns the `script_id` it is about to use; a request naming someone else's id is refused.
 
 ```js
 const slug = '<app_slug>'
