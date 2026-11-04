@@ -16,6 +16,7 @@ import { signEmbedToken } from './token.js'
 import { jwtOf, loginRequest, toLoginUser } from './login.js'
 import type {
   AiAccepted,
+  AiAttachment,
   AiHistoryPage,
   AiReply,
   AiRtLayerToken,
@@ -57,6 +58,9 @@ const AI_THREAD_ID = /^[A-Za-z0-9_-]{1,100}$/
 const AI_MAX_TOOLS = 20
 /** The API refuses more MCP servers than this in one send. */
 const AI_MAX_MCP_SERVERS = 10
+/** The API refuses more attached files than this in one send, and any address that is not https. */
+const AI_MAX_ATTACHMENTS = 10
+const AI_ATTACHMENT_TYPES = ['image', 'video', 'audio', 'pdf', 'file']
 const DEFAULT_RUN_BASE_URL = 'https://flow.sokt.io'
 const DEFAULT_MCP_API_BASE_URL = 'https://mcp.viasocket.com/api'
 
@@ -784,7 +788,8 @@ export class UserScope {
      * Sends one message and returns the answer — or, with `delivery: 'rtlayer'`, the 202's
      * `channel` the answer will be published on (subscribe to it in the browser before sending).
      * Refuses, before any request, what the API would refuse: a threadId with other characters,
-     * `rtlayer` without a threadId, a model without its service, a jsonSchema without its responseType.
+     * `rtlayer` without a threadId, a model without its service, a jsonSchema without its responseType,
+     * more than 10 attachments or one that is not https.
      */
     send: (async (params: AiSendParams): Promise<AiReply | AiAccepted> => {
       const body: Record<string, unknown> = { message: required('message', params?.message) }
@@ -831,6 +836,18 @@ export class UserScope {
           ...(server.headers ? { headers: server.headers } : {})
         }))
       }
+      if (params.attachments?.length) {
+        if (params.attachments.length > AI_MAX_ATTACHMENTS)
+          throw new ViaSocketError(`ai.send: at most ${AI_MAX_ATTACHMENTS} attachments in one message`, { status: null })
+        body.attachments = params.attachments.map((attachment) => {
+          const url = required('attachment.url', attachment?.url)
+          if (!/^https:\/\//i.test(url)) throw new ViaSocketError('ai.send: an attachment url is https only', { status: null })
+          if (attachment.type !== undefined && !AI_ATTACHMENT_TYPES.includes(attachment.type)) {
+            throw new ViaSocketError(`ai.send: an attachment type is one of ${AI_ATTACHMENT_TYPES.join(', ')}`, { status: null })
+          }
+          return { url, ...(attachment.type ? { type: attachment.type } : {}) }
+        })
+      }
       if (params.delivery) body.delivery = params.delivery
 
       const { data } = await this.call<{
@@ -858,7 +875,7 @@ export class UserScope {
       const page = Math.max(1, Math.floor(params.page ?? 1))
       const { data } = await this.call<{
         thread_id: string
-        messages?: Array<{ role: string; content: string; message_id: string; created_at: string }>
+        messages?: Array<{ role: string; content: string; attachments?: AiAttachment[]; message_id: string; created_at: string }>
         page?: number
         has_more?: boolean
       }>('GET', `/embed/ai/threads/${encodeURIComponent(required('threadId', threadId))}/history?page=${page}`)
@@ -867,6 +884,7 @@ export class UserScope {
         messages: (data.messages ?? []).map((message) => ({
           role: message.role,
           content: message.content,
+          ...(message.attachments?.length ? { attachments: message.attachments } : {}),
           messageId: message.message_id,
           createdAt: message.created_at
         })),

@@ -37,6 +37,7 @@ export type {
 export type { SignEmbedTokenInput } from './token.js'
 export type {
   AiAccepted,
+  AiAttachment,
   AiHistoryPage,
   AiMcpServer,
   AiMessage,

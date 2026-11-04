@@ -444,7 +444,50 @@ test('ai.send refuses what the API would refuse, before any request', async () =
   await assert.rejects(() => user.ai.send({ message: 'hi', jsonSchema: { name: 'x', schema: {} } }), /json_schema/)
   await assert.rejects(() => user.ai.send({ message: 'hi', threadId: 'has space' }), /threadId/)
   await assert.rejects(() => user.ai.send({ message: '' }), /message is required/)
+  const many = Array.from({ length: 11 }, (_, i) => ({ url: `https://cdn.example.com/${i}.png` }))
+  await assert.rejects(() => user.ai.send({ message: 'hi', attachments: many }), /at most 10 attachments/)
+  await assert.rejects(() => user.ai.send({ message: 'hi', attachments: [{ url: 'http://cdn.example.com/a.png' }] }), /https only/)
+  await assert.rejects(() => user.ai.send({ message: 'hi', attachments: [{ url: 'https://cdn.example.com/a.gif', type: 'gif' }] }), /attachment type/)
+  await assert.rejects(() => user.ai.send({ message: 'hi', attachments: [{ type: 'image' }] }), /attachment\.url is required/)
   assert.equal(calls.length, 0)
+})
+
+test('ai.send passes the attached files as the API takes them, with the type only when given', async () => {
+  const { user, calls } = client([ok({ thread_id: 't1', message_id: 'm1', content: 'A dog runs across a beach.', finish_reason: 'completed' })])
+  const reply = await user.ai.send({
+    threadId: 't1',
+    message: 'What happens in this clip?',
+    attachments: [{ url: 'https://cdn.example.com/clip.mp4', type: 'video' }, { url: 'https://cdn.example.com/notes.pdf' }]
+  })
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    message: 'What happens in this clip?',
+    thread_id: 't1',
+    attachments: [{ url: 'https://cdn.example.com/clip.mp4', type: 'video' }, { url: 'https://cdn.example.com/notes.pdf' }]
+  })
+  assert.equal(reply.content, 'A dog runs across a beach.')
+})
+
+test('ai.history keeps the files a user message was sent with', async () => {
+  const { user } = client([
+    ok({
+      thread_id: 't1',
+      messages: [
+        {
+          role: 'user',
+          content: 'What happens in this clip?',
+          attachments: [{ url: 'https://cdn.example.com/clip.mp4', type: 'video' }],
+          message_id: 'm1',
+          created_at: '2026-11-04T09:14:01.000Z'
+        },
+        { role: 'assistant', content: 'A dog runs across a beach.', message_id: 'm1', created_at: '2026-11-04T09:14:01.000Z' }
+      ],
+      page: 1,
+      has_more: false
+    })
+  ])
+  const page = await user.ai.history('t1')
+  assert.deepEqual(page.messages[0].attachments, [{ url: 'https://cdn.example.com/clip.mp4', type: 'video' }])
+  assert.equal('attachments' in page.messages[1], false)
 })
 
 test('ai.threads and ai.history map the lists, keeping a null title', async () => {

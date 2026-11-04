@@ -3,13 +3,16 @@
 /**
  * viasocket-login.mjs — signs in to viaSocket from the command line and sets up .env.
  *
- *   curl -fsSL https://flow.viasocket.com/viasocket-login.mjs -o viasocket-login.mjs
- *   node viasocket-login.mjs login [--env .env] [--no-open] [--timeout 300]
- *   node viasocket-login.mjs setup [--env .env] [--project <id> | --new] [--name <title>] [--no-open] [--timeout 300]
- *   node viasocket-login.mjs mcp [--file viasocket.mcp.json] [--ids viasocket.mcp.ids.json] [--call <tool> --args <json> --token <t>]
- *   node viasocket-login.mjs connect <app> [--user <id>] [--env .env] [--no-open] [--timeout 300]
+ *   npx -y viasocket-apps login [--env .env] [--no-open] [--timeout 300]
+ *   npx -y viasocket-apps setup [--env .env] [--project <id> | --new] [--name <title>] [--no-open] [--timeout 300]
+ *   npx -y viasocket-apps mcp [--file viasocket.mcp.json] [--ids viasocket.mcp.ids.json] [--call <tool> --args <json> --token <t>]
+ *   npx -y viasocket-apps connect <app> [--user <id>] [--env .env] [--no-open] [--timeout 300]
+ *   npx -y viasocket-apps check [folder or file ...]
  *
- * The same commands ship in the viasocket-apps package: `npx viasocket-apps login` / `setup` / `mcp`.
+ * This file is `bin/viasocket.mjs` of the viasocket-apps package, which is how the skill runs it: the published
+ * package by name and never a script downloaded from a URL. The same file is also served at
+ * https://flow.viasocket.com/viasocket-login.mjs for a machine without npm (`node viasocket-login.mjs <command>`;
+ * `check` then needs viasocket-check.mjs downloaded beside it).
  *
  * `login` is the OAuth 2.0 sign-in the viaSocket MCP uses (authorization code with PKCE, a client
  * registered on the spot): the command listens on a random port of 127.0.0.1, opens viaSocket's
@@ -32,8 +35,11 @@
  * 127.0.0.1 that opens viaSocket's consent popup through the connect script, then enables the app, so
  * the agent tools run on it at once. It needs what `setup` writes.
  *
+ * `check [folder or file ...]` runs viasocket-check.mjs, which sits beside this file: every viaSocket slug, key,
+ * id and URL the code hard-codes, checked against the live catalog, and the embed secret never a literal in source.
+ *
  * No dependencies, Node 18+. Exit code 0 when .env is written, 1 when sign-in or a call failed,
- * 2 on bad usage, 3 when `setup` needs --project because the workspace has several embeds.
+ * 2 on bad usage, 3 when `setup` needs --project because the workspace has several embeds; `check` exits 1 on any FAIL.
  */
 import { createServer } from 'node:http'
 import { createHash, createHmac, randomBytes } from 'node:crypto'
@@ -52,6 +58,8 @@ const WHOAMI_URL = process.env.VIASOCKET_WHOAMI_URL || 'https://flow-api.viasock
 /** The dashboard's API: embed projects and the signing secret, with the token bare in Authorization. */
 const API = (process.env.VIASOCKET_API_URL || 'https://flow-api.viasocket.com').replace(/\/+$/, '')
 const DASHBOARD = 'https://flow.viasocket.com/agent-access'
+/** The page that shows a product's three keys with one Copy button, for a sign-in that never arrived. */
+const EMBED_KEYS = 'https://flow.viasocket.com/embed-keys'
 const MCP_TOKEN_ENV = 'VIASOCKET_MCP_TOKEN'
 /** The MCP server's management API; the servers it hosts are at the same host. */
 const MCP_API = (process.env.VIASOCKET_MCP_API_URL || 'https://mcp.viasocket.com/api').replace(/\/+$/, '')
@@ -60,7 +68,7 @@ const MCP_HOST = MCP_API.replace(/\/api$/, '')
 function usage(code) {
   console.log(
     [
-      'usage: node viasocket-login.mjs <login | setup | mcp | connect <app>> [options]',
+      'usage: viasocket-apps <login | setup | mcp | connect <app> | check [folder ...]> [options]',
       '',
       '  login             sign in; writes VIASOCKET_AGENT_TOKEN and VIASOCKET_ORG_ID',
       '  setup             login if needed, then the embed project and signing secret a product needs:',
@@ -68,11 +76,14 @@ function usage(code) {
       "  mcp               create or update the product's MCP server from viasocket.mcp.json, then test it",
       '  connect <app>     connect one app (slack, gmail, google-sheets) for one end user and enable it, from a',
       '                    page this command opens; needs what setup writes. Try the agent tools without a frontend',
+      '  check [folder]    check the code for invented slugs, keys and ids and hand-built URLs against the live',
+      '                    catalog (default: the current folder); exits 1 on any FAIL',
       '',
       '  --user <id>       connect: the end user it is for, as your agent tools name them (default me)',
       '  --file <file>     mcp: the definition (default viasocket.mcp.json)',
       '  --ids <file>      mcp: where the ids of what it made are kept (default viasocket.mcp.ids.json)',
       '  --call <tool>     mcp: after the sync, call this tool on the URL with --args <json> and, on a login server, --token <t>',
+      '  --dry-run         mcp: check the definition only; nothing is signed in, created or changed',
       '  --env <file>      the env file (default .env in the current folder)',
       '  --project <id>    setup: which embed project, when the workspace has several',
       '  --new             setup: a new embed project for this product, even when the workspace has others',
@@ -93,6 +104,7 @@ function parseArgs(argv) {
     timeout: 300,
     project: '',
     newProject: false,
+    dryRun: false,
     name: '',
     file: 'viasocket.mcp.json',
     ids: 'viasocket.mcp.ids.json',
@@ -121,6 +133,7 @@ function parseArgs(argv) {
     else if (arg === '--token') options.token = next()
     else if (arg === '--project') options.project = next()
     else if (arg === '--new') options.newProject = true
+    else if (arg === '--dry-run') options.dryRun = true
     else if (arg === '--name') options.name = next()
     else if (arg === '--no-open') options.open = false
     else if (arg === '--timeout') options.timeout = Number(next())
@@ -351,15 +364,18 @@ async function signIn(options) {
         state,
         resource: RESOURCE
       }).toString()
-      console.log(`Sign in to viaSocket, pick the workspace and click Allow (waiting ${options.timeout}s):\n\n  ${url}\n`)
+      console.log(`Sign in to viaSocket (or sign up), pick your company if it asks, and click Allow (waiting ${options.timeout}s):\n\n  ${url}\n`)
       if (options.open) openBrowser(url.toString())
     }
   })
   if (!code) {
     if (registrationFailed) return null
-    console.error(
-      `No sign-in arrived in ${options.timeout}s. Run the command again, or copy the token from ${DASHBOARD} into ${options.env} as ${TOKEN_ENV}.`
-    )
+    // setup needs the product's three keys, which the token page does not show; login and mcp need the token.
+    const fallback =
+      options.command === 'setup'
+        ? `open ${EMBED_KEYS}, click Copy and paste the three lines it copies (${ORG_ENV}, ${PROJECT_ENV}, ${SECRET_ENV}) into ${options.env}`
+        : `copy the token from ${DASHBOARD} into ${options.env} as ${TOKEN_ENV}`
+    console.error(`No sign-in arrived in ${options.timeout}s. Run the command again, or ${fallback}.`)
     return null
   }
   const token = await exchangeCode({ tokenEndpoint: metadata.token_endpoint, client, code, redirectUri, verifier, resource: RESOURCE })
@@ -830,6 +846,15 @@ async function syncMcpServer({ token, definition, idsFile, options }) {
 /** The command: sync, then the test every client would do first. */
 async function mcpCommand(options, envFile) {
   const definition = readDefinition(options, envFile)
+  if (options.dryRun) {
+    // Checked as the real run checks it, and nothing sent: no sign-in, no server, no tool.
+    const count = (list, word) => `${list.length} ${word}${list.length === 1 ? '' : 's'}`
+    console.log(
+      `${options.file} is valid: ${count(definition.tools, 'tool')}, ${count(definition.skills, 'skill')}, ${count(definition.prompts, 'prompt')}; login ${definition.login.mode}. Nothing was created (--dry-run).`
+    )
+    process.exitCode = 0
+    return
+  }
   const token = await ensureMcpToken(options, envFile)
   if (!token) {
     process.exitCode = 1
@@ -886,6 +911,10 @@ async function mcpCommand(options, envFile) {
         ? "Users add it to Claude, ChatGPT, Cursor or Claude Code and sign in with the product's login."
         : 'Users add it to Claude, ChatGPT, Cursor or Claude Code; no sign-in.'
   )
+  if (definition.login.mode === 'oauth')
+    console.log(
+      `Redirect URI to register in the product's OAuth app (its loginUrl and tokenUrl must accept it): ${MCP_HOST}/oauth/${ids.server}/callback`
+    )
   if (process.exitCode === undefined) process.exitCode = 0
 }
 
@@ -919,14 +948,23 @@ async function embedApi(token, method, path, body) {
   return reply?.data
 }
 
-/** The app by its slug, as viaSocket lists it for this user: its service_id (the popup takes it) or '' for an unknown slug. */
+/**
+ * The app by its slug, as viaSocket lists it for this user: its service_id (the popup takes it), '' for an unknown
+ * slug, or a thrown error when viaSocket refused the keys themselves (401, 498), so a bad secret is never reported
+ * as a bad slug.
+ */
 async function serviceIdFor(token, slug) {
-  try {
-    const listing = await embedApi(token, 'GET', `/embed/services/${encodeURIComponent(slug)}/actions?type=action`)
-    return listing?.service_id || ''
-  } catch {
-    return ''
-  }
+  const response = await fetch(`${API}/embed/services/${encodeURIComponent(slug)}/actions?type=action`, {
+    headers: { authorization: token },
+    signal: AbortSignal.timeout(30_000)
+  })
+  const reply = await response.json().catch(() => null)
+  if (response.status === 401 || response.status === 498)
+    throw new Error(
+      `viaSocket refused the keys in .env (${response.status}): ${PROJECT_ENV} or ${SECRET_ENV} is wrong, or they belong to another workspace. Run \`npx -y viasocket-apps setup\` again.`
+    )
+  if (!response.ok || reply?.success === false) return ''
+  return reply?.data?.service_id || ''
 }
 
 /**
@@ -1013,7 +1051,14 @@ async function connectCommand(options, envFile) {
     return
   }
   const token = embedToken(orgId, projectId, options.user, secret)
-  const serviceId = await serviceIdFor(token, options.app)
+  const serviceId = await serviceIdFor(token, options.app).catch((error) => {
+    console.error(error.message)
+    return null
+  })
+  if (serviceId === null) {
+    process.exitCode = 1
+    return
+  }
   if (!serviceId) {
     console.error(`No viaSocket app has the slug "${options.app}". Slugs are exact and lowercase, such as slack, gmail or google-sheets.`)
     process.exitCode = 1
@@ -1052,7 +1097,27 @@ async function connectCommand(options, envFile) {
   process.exitCode = 0
 }
 
+// ---- the checker ------------------------------------------------------------------------------------
+
+/**
+ * `check [folder or file ...]`: viasocket-check.mjs, which ships beside this file in the package, run with the
+ * rest of the arguments. It sets the exit code itself: 1 on any FAIL.
+ */
+async function checkCommand(args) {
+  const checker = new URL('./viasocket-check.mjs', import.meta.url)
+  if (!existsSync(checker)) {
+    console.error(
+      'check needs viasocket-check.mjs beside this file: run it from the package (npx -y viasocket-apps check) or download https://flow.viasocket.com/viasocket-check.mjs next to this file.'
+    )
+    process.exitCode = 2
+    return
+  }
+  process.argv = [process.argv[0], process.argv[1], ...args]
+  await import(checker.href)
+}
+
 async function main() {
+  if (process.argv[2] === 'check') return checkCommand(process.argv.slice(3))
   const options = parseArgs(process.argv.slice(2))
   const envFile = resolve(process.cwd(), options.env)
 

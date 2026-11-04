@@ -42,27 +42,29 @@ npx skills add Walkover-Web-Solution/viasocket-apps
 ```
 
 Add `-g` to install it for every project. No install? Paste this into your agent:
-`Read https://viasocket.com/docs/skill.md and follow it.`
+`Read https://viasocket.com/docs/skill.md?format=sdk and follow it.` (Without `?format=sdk` the same
+skill speaks plain HTTP, for a backend in any language.)
 
-The agent needs three values from the viaSocket dashboard (**Integrations → Create embed →
-Install Code**): `org_id` and `project_id`, which the dashboard's "Copy prompt" hands it, and
-`VIASOCKET_EMBED_SECRET`, which goes in your server's `.env`.
-[skills/viasocket-integrations/SKILL.md](skills/viasocket-integrations/SKILL.md) is the install
-file: the description that makes an agent load the skill, and one instruction — fetch the current
-skill, `https://viasocket.com/docs/skill.md`, every time it is used — so an install
-never goes stale.
+The agent gets the three values a product needs (`VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`,
+`VIASOCKET_EMBED_SECRET`) itself with `npx viasocket-apps setup`: one click on Allow in your browser,
+and they are in `.env`. Without a terminal it sends you to **Integrations → the embed → Install Code**,
+where they sit with Copy buttons.
+[skills/viasocket-integrations/SKILL.md](skills/viasocket-integrations/SKILL.md) is the skill itself,
+with its reference pages beside it, so what you install is what the security audits read. It names
+the live skill, `https://viasocket.com/docs/skill.md`, and tells the agent to follow that one whenever
+its version is newer, so an install never goes stale.
 
 Before you ship — with or without an agent — check the code against the live catalog:
 
 ```sh
-curl -fsSL https://flow.viasocket.com/viasocket-check.mjs -o viasocket-check.mjs
-node viasocket-check.mjs src
+npx viasocket-apps check src
 ```
 
 It finds every viaSocket slug, key, id and URL in your code and says whether each names a real app, action
 or trigger (keys are case-sensitive), is used where its call expects it, and whether any viasocket URL was
 built by hand. No dependencies; exits 1 on a failure, so it can be a test. It reads no `.env` file and prints
-no line of code.
+no line of code. (The same checker is served at `https://flow.viasocket.com/viasocket-check.mjs` for a machine
+without npm.)
 
 ### Set up from the command line
 
@@ -237,6 +239,9 @@ const reply = await user.ai.send({
   ]
 })
 reply.content // the answer; with responseType 'json_object' or 'json_schema', the parsed object
+
+// Files the user attached: up to 10 public https URLs. Images, PDFs and documents go to models that take them; video needs a Gemini model.
+await user.ai.send({ threadId, message: 'What happens in this clip?', service: 'gemini', model: 'gemini-3.1-pro-preview', attachments: [{ url: 'https://cdn.example.com/clip.mp4', type: 'video' }] })
 
 const threads = await user.ai.threads() // [{ threadId, title, updatedAt }] — title is null until the AI writes it
 const page = await user.ai.history(threadId, { page: 1 }) // { messages, page, hasMore } — 40 exchanges a page, page 1 the latest
@@ -552,7 +557,7 @@ The screens, the callback and the setup are in
 | `user.renameFlow(scriptId, { title, description, meta })` | Rename a flow; `meta` comes back as `metadata` in the prebuilt UI's events. |
 | `user.listConnections()` | Every app this user has connected; `isExpired: true` means reconnect it in place with `connect({ authId })`. |
 | `user.revokeConnection(authId)` | Disconnect an app. Pause its flows first. |
-| `user.ai.send({ message, threadId, prompt, tools, responseType, delivery })` | One message to the assistant we run for this user. Returns `{ threadId, messageId, content, finishReason }`, or `{ threadId, messageId, channel }` with `delivery: 'rtlayer'`. |
+| `user.ai.send({ message, threadId, prompt, tools, mcpServers, attachments, responseType, delivery })` | One message to the assistant we run for this user. Returns `{ threadId, messageId, content, finishReason }`, or `{ threadId, messageId, channel }` with `delivery: 'rtlayer'`. |
 | `user.ai.threads()` / `user.ai.history(threadId, { page })` | This user's threads, newest first (`title` is `null` until the AI writes it); one thread's messages, 40 exchanges a page. |
 | `user.ai.rtlayerToken()` | A 48-hour subscribe token for the browser, with the `channelPrefix` every thread's channel starts with. |
 | `user.memory.token({ expiresIn })` | A fresh AI-memory token, `{ token, url, mcpUrl, me, spaces, expiresIn }`; 60 to 86400 seconds, default 3600. Take a short one for an AI's tool headers or an agent. |

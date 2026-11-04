@@ -275,6 +275,64 @@ test('a bad option exits 2 with the usage', async () => {
   assert.match(out, /usage:/)
 })
 
+// ---- the check command ----------------------------------------------------------------------------
+
+test('check runs the checker beside the command over the given folder, and exits 1 on a FAIL', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'viasocket-check-'))
+  writeFileSync(join(dir, 'clean.js'), 'export const greet = (name) => `hello ${name}`\n')
+  const check = (folder) =>
+    new Promise((resolve) => {
+      const child = spawn(process.execPath, [bin, 'check', folder], { stdio: ['ignore', 'pipe', 'pipe'] })
+      let out = ''
+      child.stdout.on('data', (chunk) => (out += chunk))
+      child.stderr.on('data', (chunk) => (out += chunk))
+      child.on('exit', (code) => resolve({ code, out }))
+    })
+  // Nothing viaSocket-related in the code: no network call is made, and the summary names the one file.
+  const clean = await check(dir)
+  assert.equal(clean.code, 0, clean.out)
+  assert.match(clean.out, /0 FAIL, 0 WARN over 1 file/)
+  // The secret as a literal is the one check that needs no catalog.
+  writeFileSync(join(dir, 'leak.js'), "const VIASOCKET_EMBED_SECRET = 'not-in-source'\n")
+  const leaking = await check(dir)
+  assert.equal(leaking.code, 1, leaking.out)
+  assert.match(leaking.out, /VIASOCKET_EMBED_SECRET is a string literal in source/)
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test('check passes the apps module base URLs and the prebuilt UI origin, and fails a connect script from another host', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'viasocket-check-'))
+  const check = (folder, env = {}) =>
+    new Promise((resolve) => {
+      const child = spawn(process.execPath, [bin, 'check', folder], { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] })
+      let out = ''
+      child.stdout.on('data', (chunk) => (out += chunk))
+      child.stderr.on('data', (chunk) => (out += chunk))
+      child.on('exit', (code) => resolve({ code, out }))
+    })
+  // The apps module's constants, as apps-api.md prints them, and the origin embed.md says to compare against.
+  writeFileSync(
+    join(dir, 'module.js'),
+    [
+      "const API = 'https://flow-api.viasocket.com'",
+      "const RUN = 'https://flow.sokt.io'",
+      "const PLUGS = 'https://plug-service.viasocket.com'",
+      "if (event.origin !== 'https://embedfrontend.viasocket.com') return",
+      '// register https://mcp.viasocket.com/oauth/665f0c2a9b1e/callback as the redirect URI'
+    ].join('\n')
+  )
+  const clean = await check(dir)
+  assert.equal(clean.code, 0, clean.out)
+  assert.match(clean.out, /0 FAIL/)
+
+  // A connect script copied from a local docs server; the real one is pointed at a closed port, so no network.
+  writeFileSync(join(dir, 'page.html'), '<script src="http://localhost:8788/connect.js"></script>\n')
+  const local = await check(dir, { VIASOCKET_CONNECT_SCRIPT: 'http://127.0.0.1:9/connect.js' })
+  assert.equal(local.code, 1, local.out)
+  assert.match(local.out, /the connect script is loaded from http:\/\/localhost:8788\/connect\.js/)
+  rmSync(dir, { recursive: true, force: true })
+})
+
 // ---- the mcp command -------------------------------------------------------------------------------
 
 /**
@@ -491,6 +549,21 @@ test('mcp mints the MCP token from the agent token, creates the server, tools, s
   assert.equal(mcp.seen.requests.filter((request) => request.path === '/api/mcp' && request.method === 'POST').length, 1)
 })
 
+test('mcp --dry-run checks the definition and sends nothing: no sign-in, no server', async (t) => {
+  const fake = await fakeServer()
+  const mcp = await fakeMcp()
+  t.after(() => fake.server.close())
+  t.after(() => mcp.server.close())
+  const dir = dirname(tempEnv('TASKPAD_SECRET=s3\n'))
+  writeFileSync(join(dir, 'viasocket.mcp.json'), JSON.stringify(DEFINITION))
+  const dry = runMcp(['--dry-run'], fake, mcp, dir)
+  assert.equal(await dry.exited, 0)
+  assert.match(dry.output.text, /viasocket\.mcp\.json is valid: \d+ tools?, \d+ skills?, \d+ prompts?; login [\w-]+\. Nothing was created/)
+  assert.equal(Object.keys(mcp.state.servers).length, 0)
+  assert.deepEqual(mcp.seen.requests, [])
+  assert.equal(fake.seen.register, null, 'it signed in')
+})
+
 test('mcp refuses a bad definition by key before creating anything, and reads ${ENV} from the env file', async (t) => {
   const fake = await fakeServer()
   const mcp = await fakeMcp()
@@ -581,7 +654,7 @@ test('mcp moves an ids-only viasocket.mcp.json of the earlier layout, keeps the 
 // `npx viasocket-apps connect <app>` without a browser. A fake plays the embed API (the app's listing by
 // slug, the user's flows, enable); the test plays the page: it loads it and posts the authId the popup
 // would have sent back.
-async function fakeEmbed({ flows = [] } = {}) {
+async function fakeEmbed({ flows = [], refuseKeys = false } = {}) {
   const seen = { enabled: [], tokens: [] }
   let origin = ''
   const server = createServer(async (req, res) => {
@@ -591,6 +664,8 @@ async function fakeEmbed({ flows = [] } = {}) {
       res.end(JSON.stringify(body))
     }
     seen.tokens.push(req.headers.authorization)
+    // A wrong secret or project: the API refuses the embed token itself, whatever the route.
+    if (refuseKeys) return json(401, { message: 'unauthorized user ' })
     const listing = url.pathname.match(/^\/embed\/services\/([^/]+)\/actions$/)
     if (listing) {
       if (listing[1] !== 'slack') return json(404, { success: false, message: `Unknown service '${listing[1]}'.` })
@@ -677,4 +752,13 @@ test('connect reports a refusal from the popup, and refuses an unknown slug or a
   assert.equal(await noSetup.exited, 1)
   assert.match(noSetup.output.text, /Run `npx viasocket-apps setup` first/)
   assert.deepEqual(fake.seen.enabled, [])
+})
+
+test('connect says the keys were refused, never that a real slug is unknown, when the API answers 401', async (t) => {
+  const fake = await fakeEmbed({ refuseKeys: true })
+  t.after(() => fake.server.close())
+  const refused = runConnect(['slack'], fake, tempEnv(embedEnv))
+  assert.equal(await refused.exited, 1)
+  assert.match(refused.output.text, /refused the keys in \.env \(401\)/)
+  assert.doesNotMatch(refused.output.text, /No viaSocket app has the slug/)
 })

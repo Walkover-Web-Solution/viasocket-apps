@@ -338,9 +338,23 @@ export interface AiMcpServer {
   headers?: Record<string, string>
 }
 
+/**
+ * One file the user attached to their message, by a public https URL viaSocket's AI can download (a public link, or
+ * a pre-signed one that is still valid). Images, PDFs and documents go to the models that take them; video needs a
+ * Gemini model (`service: 'gemini'`); audio a Gemini model or Deepgram.
+ */
+export interface AiAttachment {
+  /** `https` only, up to 2000 characters, answering without a login. */
+  url: string
+  /** Leave it out and viaSocket works it out from the file. `file` is any other document (Word, Excel, CSV, text). */
+  type?: 'image' | 'video' | 'audio' | 'pdf' | 'file'
+}
+
 export interface AiSendParams {
   /** What the user said. */
   message: string
+  /** Up to 10 files the user attached to this message: images, video, audio, PDFs, documents. */
+  attachments?: AiAttachment[]
   /**
    * Your own string per conversation: letters, digits, `-` and `_`, up to 100 characters. Omit to
    * start a thread and read the id from the reply. Required with `delivery: 'rtlayer'`, so the
@@ -399,6 +413,8 @@ export interface AiThread {
 export interface AiMessage {
   role: 'user' | 'assistant' | string
   content: string
+  /** The files a user message was sent with, when it had any. */
+  attachments?: AiAttachment[]
   /** A user message and its reply share one id. */
   messageId: string
   createdAt: string
