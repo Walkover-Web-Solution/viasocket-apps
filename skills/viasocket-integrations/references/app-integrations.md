@@ -10,28 +10,28 @@ viaSocket keeps each connection alive, and the product keeps one id per user and
 
 ## Steps
 
-1. **Setup**, once per project: setup.md. Skip it when the three keys are in `.env`
-   and its check passes.
-2. **Find the app and what to call:** "Find what to call" on actions-and-events.md.
-   An app is a third-party service on viaSocket (Slack, Google Sheets); code and the calls name it by its **slug**
-   (`slack`, `google-sheets`), and only the Connect popup takes its `service_id`. An **action** is what an app can do
-   (send a message) and a **trigger** what it can report (a new message); each has a page with its **key**
-   (`Send_Message`), its **version** (`v107`) and its `inputData`, and the calls name it by key and version. Read the
-   app's page and the page of each action and trigger the feature needs. After the plan's yes, a test connection
-   (test-connection.md): with the command when you can run one; else, once the
-   product's Connect button exists, as the one thing left in the report, tested as soon as it is there.
-3. **Plan, then get a yes,** as the skill's "The person you work for" says: the three-line plan, before any code, and
-   wait. This table goes into `viasocket-plan.md` in the project and into the report:
+1. **Read, no sign-in yet.** "Find what to call" on actions-and-events.md
+   finds the app and opens its page, https://viasocket.com/docs/<app slug>.md. That page lists every action (what
+   the app can do: send a message) and trigger (what it can report: a new message) in one row each: its page path
+   (`send-message`), its key (`Send_Message`) and its version (`v107`). Open an action by its path; name it in code
+   by its key and version. The key is case-sensitive and copied from the page, never typed from memory. Read the
+   page of each action and trigger the feature needs.
+2. **Plan, then get a yes,** as the skill's "The person you work for" says: the three-line plan, before any code or
+   sign-in, and wait. This table goes into `viasocket-plan.md` in the project and into the report:
 
    | app                   | action or trigger (key, version) | key of `inputData`     | who supplies it                      | when                                                  |
    | --------------------- | -------------------------------- | ---------------------- | ------------------------------------ | ----------------------------------------------------- |
-   | google-search-console | `Fetch_Search_Analytics` `v4`    | `siteUrl`              | the user, from a list of their sites | once, right after Connect; stored with the connection |
-   | google-search-console | `Fetch_Search_Analytics` `v4`    | `startDate`, `endDate` | the product (last 28 days)           | per run                                               |
+   | google-search-console | `fetch_Search_Analytics` `v9`    | `siteUrl`              | the user, from a list of their sites | once, right after Connect; stored with the connection |
+   | google-search-console | `fetch_Search_Analytics` `v9`    | `startDate`, `endDate` | the product (last 28 days)           | per run                                               |
 
    Below the table, one line per action: who picks it (the product's code, the user from a list, or the product's AI
    from tools) and where that choice is shown and changed. Never decide a row silently. The `when` column follows the
    rule "Once, or per run" on actions-and-events.md.
 
+3. **Setup and a test connection**, after the yes. Setup once per project: setup.md
+   (skip it when the three keys are in `.env` and its check passes). Then a test connection,
+   test-connection.md: with the command when you can run one; else, once the
+   product's Connect button exists, tested as soon as it is there and listed as the one thing left in the report.
 4. **Build, testing as you go.** Run each call once on the test connection before writing the screen that uses it,
    and write later code from the real response; use a page's sample only until you have one. Every action is named
    by its key and a pinned version; every option list searches and pages as the page says.
