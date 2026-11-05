@@ -3,8 +3,8 @@
   "notGrouped": "bottom",
   "groupings": [
     {
-      "title": "viaSocket: app integrations, automations, AI, AI memory, login, MCP servers, plugs",
-      "description": "For the product's users: connect any of 2,300+ apps, run their actions, react to their events, automations per user, an AI assistant on any model, AI memory, and login with teams and organisations. For the signed-in developer: setup in one click, their own automations, an MCP server for the product, and the product as an app on viaSocket.",
+      "title": "viaSocket: 2,300+ apps, automations and AI, for you or inside your product",
+      "description": "Do something in Slack, Gmail, Sheets or any of 2,300+ apps, once or every morning. Let the users of your product connect their own apps and get automations of their own. Put an AI with memory and tools in a product, add login, teams and organisations, and make a product a tool that Claude, ChatGPT and other agents use. viaSocket handles the sign-in, the tokens, the webhooks and the bills, so nothing has to be built or hosted.",
       "skills": [
         "viasocket-integrations"
       ]
