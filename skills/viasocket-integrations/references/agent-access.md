@@ -12,8 +12,9 @@ command that writes those keys signs in this same way while it runs, so after it
 in `.env`.
 
 The ways in, in order, are the skill's "Sign in": 1 the viaSocket MCP server already connected, 2 the login command,
-3 the viaSocket MCP server's own sign-in, 4 a token they paste. Take the first one you can do; when it fails, say so
-in one line and take the next. Below: how each way works, how to check you are in, and what to do when one fails.
+3 the viaSocket MCP server's own sign-in, 4 a token they paste. Take the first one you can do; when it fails, take
+the next without a word about the failure: the person sees only the next link or command. Below: how each way
+works, how to check you are in, and what to do when one fails.
 
 ## 1. The viaSocket MCP server, already signed in
 
@@ -27,37 +28,42 @@ its `quickstart-viasocket-developer-hub` skill first.
   `call_any_read_api_of_viasocket` / `call_any_api_of_viasocket`.
 
 Check you are in with `get_org_details_by_token`: it answers `data.org.id`. An error that says to sign in, or an empty
-answer, means the connector's sign-in has lapsed: take way 2 when you can run a command on the machine where their
-browser is. Otherwise, for their own account, way 3; for a product's users, the keys page in
-setup.md gives all three keys at once, so go there.
+answer: do not explain it. Take way 2 when you can run a command on the machine where their browser is. Otherwise,
+for their own account, way 3; for a product's users, the keys page in setup.md
+gives all three keys at once, so go there. Check again before every write: a sign-in can end in the middle of a
+job, and the flow helpers then answer empty lists instead of an error.
 
 ## 2. The login command, when you can run a command on the machine where their browser is
 
 Run it in the project folder (Node.js 20+; nothing to install):
 
 ```bash
-npx -y viasocket-apps login
+npx -y viasocket-apps login --no-open
 ```
 
-It opens viaSocket's sign-in page in their browser and waits up to five minutes. Tell them:
+It prints a sign-in link and waits up to five minutes. Give them the link as the one thing to do:
 
-> Sign in to viaSocket in the tab that opened (or sign up), pick your company if it asks, and click **Allow**.
+> Sign in here: <link>, pick your workspace, and click **Allow**.
 
 On Allow it writes `VIASOCKET_AGENT_TOKEN` and `VIASOCKET_ORG_ID` to `.env`, checks them with viaSocket, prints the
 workspace and exits 0. You never see the token.
 
-- Your environment refuses the command, or there is no browser on this machine: run it in the background with
-  `--no-open`, send them the printed URL, and read `.env` once they say they clicked Allow. This works only when
-  their browser can reach `127.0.0.1` of the machine running the command (a local agent, not a cloud sandbox): if it
-  can't, go to way 3 or 4.
-- Exit 1 (nothing arrived, or the sign-in was refused): run it once more, then the next way.
+- Always `--no-open`: without it the command opens a tab in their browser by itself, and people lose the chat.
+  Run it in the background when your environment runs commands to completion, and read `.env` once it exits.
+- The link works only when their browser can reach `127.0.0.1` of the machine running the command (a local agent,
+  not a cloud sandbox): if it can't, way 3 or 4.
+- Exit 1 (nothing arrived, or the sign-in was refused): hand the link once more, then the next way. Never say that
+  a sign-in failed, expired or lapsed; the link is the message.
+- It lands in the workspace they pick on the sign-in page, which may not be the one the work is in: the printed
+  workspace and `VIASOCKET_ORG_ID` say which. When the work lives in a known workspace, name it in the one line.
 - `--env <file>` picks another file. The same package's `setup` and `mcp` commands sign in this way themselves when
   `.env` has no token.
 
 ## 3. The viaSocket MCP server's sign-in, when you can use a connector but not a command
 
-If the connector is in your tool list and its sign-in has lapsed, ask once, with the exact link to your own
-client's connector settings in place of `<link>` (Claude.ai: https://claude.ai/settings/connectors), then wait:
+If the connector is in your tool list and its tools answer that they need a sign-in, give the exact link to your
+own client's connector settings in place of `<link>` (Claude.ai: https://claude.ai/settings/connectors) as the one
+thing to do, then wait:
 
 > Open <link>, click **Connect** (or **Reconnect**) next to viaSocket, sign in, and tell me when it's done.
 
@@ -114,8 +120,8 @@ guess.
   deploys.
 - One token per person and workspace; a second copy from the page is the same token. If it may have leaked, they
   click **Regenerate** on the page and every agent holding the old one stops working.
-- The embed signing secret, an embed token, a `proxy_auth_token` and a `script_id` are different things; none of them
-  works here and this token works nowhere they do.
+- It is the person's token only: a product's keys (setup.md) are different things
+  and do not work here.
 
 ## Which workspace
 

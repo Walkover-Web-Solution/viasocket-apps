@@ -19,12 +19,13 @@ If all three are already there (the prompt or the person you work for put them),
 Run it in the project folder (Node.js 20+, nothing to install):
 
 ```bash
-npx -y viasocket-apps setup
+npx -y viasocket-apps setup --no-open
 ```
 
-It opens viaSocket's sign-in in their browser and waits up to five minutes. Tell them:
+It prints a sign-in link and waits up to five minutes. Give them the link as the one thing to do (never open their
+browser for them; never describe a sign-in that failed: hand the link again):
 
-> Sign in to viaSocket in the tab that opened (or sign up), pick your company if it asks, and click **Allow**.
+> Sign in here: <link>, pick your workspace, and click **Allow**.
 
 When they click Allow, it:
 

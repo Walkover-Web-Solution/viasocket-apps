@@ -65,7 +65,8 @@ every line apply to each action and trigger in play, even when the person you wo
 - **Where and when each value comes from:** every key of every `inputData`, as the actions-and-events page decides
   it: the user on screen (once after Connect, or per run), the product's data or AI per run, or a constant only
   when it is right for every user.
-- **Who picks the action:** the product's code, the user from a list, or the product's AI from tool definitions.
+- **Who picks the action:** the product's code or the user from a list: a flow per saved action. The product's AI
+  from tool definitions: the enabled app. An action whose `pauses` is set is always a flow.
 - **Where it runs:** actions from the server, each `script_id` used only for the user who owns it and that
   ownership checked on the server; events through a handler on viaSocket, its record saved; the browser holds only
   the embed token (signed with `VIASOCKET_EMBED_SECRET` per user on the server), for the Connect popup and the

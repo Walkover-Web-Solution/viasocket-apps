@@ -25,26 +25,28 @@ agent-access.md must pass.
 
 ## The calls
 
-Thirteen functions, all `POST https://flow.sokt.io/func/<id>` with `Content-Type: application/json`, the JSON body
-shown, and `Authorization: <VIASOCKET_AGENT_TOKEN>` (through the MCP: `call_any_api_of_viasocket`, `method: "POST"`,
-`Authorization` empty). A refused call still answers HTTP 200: the refusal is in the body (`success: false`, or
-`error`). Reads change nothing; writes need their yes.
+Thirteen calls, each with `Content-Type: application/json`, the JSON body shown, and
+`Authorization: <VIASOCKET_AGENT_TOKEN>` (through the MCP: `call_any_api_of_viasocket` for a POST,
+`call_any_read_api_of_viasocket` for a GET, `Authorization` empty). Nine are `POST https://flow.sokt.io/func/<id>`
+and answer HTTP 200 even when refused: the refusal is in the body (`success: false`, or `error`). The four that
+build a flow are routes on `flow-api.viasocket.com` and answer real statuses: 400 names the field, 403 is another
+user's flow. Reads change nothing; writes need their yes.
 
-| call                   | id             | body                                                                                                                                                                                                                        | kind                            | returns                                                                                                                  |
-| ---------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Search Services        | `scriPdfrkbGo` | `{ "searchquery": "slack" }`                                                                                                                                                                                                | read, public catalog            | `services[]` with `service_id`, `service_name`, `service_description`                                                    |
-| List Actions           | `scricjNm9JHL` | `{ "serviceId": "<service_id>" }` (camelCase)                                                                                                                                                                               | read, public catalog            | `actions[]` with `action_id`, `action_name`, `action_description`, `fields_for_action_details`, `sample_response_format` |
-| List Triggers          | `scriSpsx1eK3` | `{ "service_id": "<service_id>" }` (snake_case)                                                                                                                                                                             | read, public catalog            | `triggers[]` with `trigger_id`, `trigger_name`, `description`, `sample_payload_to_flow` (what the flow receives)         |
-| List Connections       | `scridj7tAr3d` | `{}`                                                                                                                                                                                                                        | read                            | `auth_id`, `service_id`, `service_name`, `connection_label` (a JSON string: parse it before showing it)                  |
-| Create Connection Link | `scri5aQxBVDS` | `{ "service_ids": ["<service_id>"] }`                                                                                                                                                                                       | read: only makes a sign-in URL  | `data[]` with `connection_url` per service                                                                               |
-| List Flows             | `scri9AcTXQz6` | `{}`                                                                                                                                                                                                                        | read                            | `flows[]` with `script_id`, title and trigger type                                                                       |
-| Get Flow               | `scriiyjwEBCw` | `{ "script_id": "<script_id>" }`                                                                                                                                                                                            | read                            | the trigger and the full `steps[]`                                                                                       |
-| Build Trigger Input    | `scriLeYwDcRh` | `{ "service_id": "<service_id>", "trigger_id": "<trigger_id>", "auth_id": "<auth_id>", "instructions": "<plain words>", "thread_id": "<your id>" }`                                                                         | saves nothing                   | `inputData` (pass it to Save Trigger verbatim) and `trigger_response` (a sample payload the steps can read)              |
-| Build Action Input     | `scri0xjrcFYO` | `{ "service_id": "<service_id>", "action_id": "<action_id>", "auth_id": "<auth_id>", "instructions": "<plain words>", "thread_id": "<your id>" }`                                                                           | saves nothing                   | `inputData` (paste it into the step code verbatim, interpolating context) and `response_schema`                          |
-| Create Empty Flow      | `scriawxQq670` | `{ "flow_title": "<title>", "flow_description": "<one line>" }`                                                                                                                                                             | **write**                       | `data.script_id`                                                                                                         |
-| Save Trigger           | `scriiFjLfCTU` | `{ "scriptId": "<script_id>", "triggerType": "plugin" \| "cron" \| "webhook", "trigger_id": "<trigger_id>", "auth_id": "<auth_id>", "inputData": {}, "cronStatement": "<cron>" }` (the last four as the trigger type needs) | **write**, replaces the trigger | the saved trigger                                                                                                        |
-| Save Steps             | `scriXhp94DJ8` | `{ "scriptId": "<script_id>", "steps": [{ "stepname": "<name>", "code": "<js>", "service_action_functions": [] }] }`                                                                                                        | **write**, replaces all steps   | the saved steps                                                                                                          |
-| Run Action Once        | `scri5SwnfYyK` | `{ "service_id": "<service_id>", "action_id": "<action_id>", "auth_id": "<auth_id>", "instructions": "<plain words>", "thread_id": "<your id>" }`                                                                           | **runs a real action**          | the action's result                                                                                                      |
+| call                   | id                                                                    | body                                                                                                                                                                                                                                         | kind                                                                                                                                         | returns                                                                                                                                                                                                         |
+| ---------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Search Services        | `scriPdfrkbGo`                                                        | `{ "searchquery": "slack" }`                                                                                                                                                                                                                 | read, public catalog                                                                                                                         | `services[]` with `service_id`, `service_name`, `service_description`                                                                                                                                           |
+| List Actions           | `scricjNm9JHL`                                                        | `{ "serviceId": "<service_id>" }` (camelCase)                                                                                                                                                                                                | read, public catalog                                                                                                                         | `actions[]` with `action_id`, `action_name`, `action_description`, `fields_for_action_details`, `sample_response_format`                                                                                        |
+| List Triggers          | `scriSpsx1eK3`                                                        | `{ "service_id": "<service_id>" }` (snake_case)                                                                                                                                                                                              | read, public catalog                                                                                                                         | `triggers[]` with `trigger_id`, `trigger_name`, `description`, `sample_payload_to_flow` (what the flow receives)                                                                                                |
+| List Connections       | `scridj7tAr3d`                                                        | `{}`                                                                                                                                                                                                                                         | read                                                                                                                                         | `auth_id`, `service_id`, `service_name`, `connection_label` (a JSON string: parse it before showing it)                                                                                                         |
+| Create Connection Link | `scri5aQxBVDS`                                                        | `{ "service_ids": ["<service_id>"] }`                                                                                                                                                                                                        | read: only makes a sign-in URL                                                                                                               | `data[]` with `connection_url` per service                                                                                                                                                                      |
+| List Flows             | `scri9AcTXQz6`                                                        | `{}`                                                                                                                                                                                                                                         | read                                                                                                                                         | `flows[]` with `script_id`, title and trigger type                                                                                                                                                              |
+| Get Flow               | `GET https://flow-api.viasocket.com/automations/<script_id>`          | no body                                                                                                                                                                                                                                      | read                                                                                                                                         | `{ script_id, title, status, trigger, steps, variables, version, webhook_url_of_flow }`                                                                                                                         |
+| Build Trigger Input    | `scriLeYwDcRh`                                                        | `{ "service_id": "<service_id>", "trigger_id": "<trigger_id>", "auth_id": "<auth_id>", "instructions": "<plain words>", "thread_id": "<your id>" }`                                                                                          | saves nothing                                                                                                                                | `inputData` (pass it to Save Trigger verbatim) and `trigger_response` (a sample payload the steps can read)                                                                                                     |
+| Build Action Input     | `scri0xjrcFYO`                                                        | `{ "service_id": "<service_id>", "action_id": "<action_id>", "auth_id": "<auth_id>", "instructions": "<plain words>", "thread_id": "<your id>" }`                                                                                            | saves nothing, **runs the action once for real** to test it (a message is sent, a row is added): say so and get a yes when the action writes | `inputData` (paste it into the step code, replacing a `{{name}}` placeholder with the context path) and a sample result; the answer is text: read the JSON after `## inputData` and `## sample response format` |
+| Create Empty Flow      | `POST https://flow-api.viasocket.com/automations`                     | `{ "title": "<title>", "description": "<one line>" }`                                                                                                                                                                                        | **write**                                                                                                                                    | `script_id`                                                                                                                                                                                                     |
+| Save Trigger           | `POST https://flow-api.viasocket.com/automations/<script_id>/trigger` | `{ "triggerType": "plugin" \| "cron" \| "webhook", "trigger_id": "<trigger_id>", "auth_id": "<auth_id>", "inputData": {}, "cronStatement": "<cron>", "runOncePerItem": true, "arrayKey": "<key>" }` (only the fields the trigger type takes) | **write**, replaces the trigger                                                                                                              | the saved trigger                                                                                                                                                                                               |
+| Save Steps             | `POST https://flow-api.viasocket.com/automations/<script_id>/steps`   | `{ "steps": [{ "stepname": "<name>", "code": "<js>", "service_action_functions": [{ "name": "<what the code calls>", "auth_id": "<auth_id, or NoAuth for an app without sign-in>", "action_id": "<action_id>" }] }] }`                       | **write**, replaces all steps and publishes                                                                                                  | the flow, as Get Flow answers it                                                                                                                                                                                |
+| Run Action Once        | `scri5SwnfYyK`                                                        | `{ "service_id": "<service_id>", "action_id": "<action_id>", "auth_id": "<auth_id>", "instructions": "<plain words>", "thread_id": "<your id>" }`                                                                                            | **runs a real action**                                                                                                                       | the action's result                                                                                                                                                                                             |
 
 `thread_id`: one id you make per trigger or step (`slack-send-message-sales`), reused for later changes to the same
 step, so the builder keeps its context.
@@ -53,7 +55,7 @@ Field docs and samples: `https://app.docstar.io/p/automations/llms.txt?collectio
 `https://app.docstar.io/p/app-catalog-and-connections/llms.txt?collectionId=eInXd9-ETenX` (each endpoint links its
 `.openapi.yml`). Fetch raw.
 
-**An empty answer is not proof.** Every call answers HTTP 200: a missing or wrong token gives `{ "flows": [] }`,
+**An empty answer is not proof.** Every `flow.sokt.io/func` call answers HTTP 200: a missing or wrong token gives `{ "flows": [] }`,
 `{ "error": {} }` or `null`, and List Actions sent `service_id` instead of `serviceId` gives `{ "actions": [] }`.
 Before you conclude there is nothing, run the agent-access check and confirm the id and its key spelling came from
 the right list call (`serviceId` for List Actions, `service_id` for List Triggers).
@@ -92,7 +94,8 @@ Never put the agent token in a step, an `inputData` or a log.
    it resolves the ids itself) → Save Trigger with `triggerType: "plugin"`, `trigger_id`, `auth_id` and the returned
    `inputData` verbatim. A schedule: Save Trigger with `triggerType: "cron"` and `cronStatement` (five-field cron or
    plain words; unreadable text is refused). A call from their own code, a webhook: Save Trigger with
-   `triggerType: "webhook"` only; the flow then runs on each `POST https://flow.sokt.io/func/<script_id>` and the
+   `triggerType: "webhook"` (add `runOncePerItem: true`, and `arrayKey` when the array sits under a key, to run once
+   per item of what the caller posts); the flow then runs on each `POST https://flow.sokt.io/func/<script_id>` and the
    caller gets the last step's return value. Anyone with that address can run the flow, so the product keeps it on
    its server and sends a key of its own in a header (`X-Flow-Key`, a long random value in the product's `.env`). A
    step's return does not stop the steps after it, so a first step only checks the key, and every later step that
@@ -110,13 +113,26 @@ Never put the agent token in a step, an `inputData` or a log.
 
 6. **The steps.** For each app action: Build Action Input → its `inputData` goes into the step's code; then Save Steps
    with `scriptId` and the **whole** `steps` array: `stepname`, `code`, `service_action_functions: [{ name, auth_id,
-action_id }]` (one per action the code calls; `name` is the exact action name; `[]` for a step that only decides or
-   transforms).
-7. **Run it once** if they agree (POST the webhook, cause the event, or wait for the schedule), and tell them the
-   flow is in their viaSocket account, what it does, and how to pause it (under Automations at
-   https://flow.viasocket.com, open the flow).
+action_id }]` (one per action the code calls; `name` is what the step code calls, `sendMessage`, as Build Action
+   Input's sample shows; `[]` for a step that only decides or transforms).
+7. **Run it once** if they agree (POST the webhook, cause the event, or wait for the schedule), check it ran, and
+   tell them the flow is in their viaSocket account (under Automations at https://flow.viasocket.com) and what it
+   does.
 
-**Edit** = Get Flow → change → Save Steps with every step. A step left out is deleted.
+After it is saved, three calls on `flow-api.viasocket.com`, header `Authorization: <VIASOCKET_AGENT_TOKEN>` (through
+the MCP: `Authorization` empty), `<project_id>` being `proj<VIASOCKET_ORG_ID>` unless Get Flow says another:
+
+| to                                                                | call                                                                                                                    |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| the last run and each step's result (about a minute after it ran) | `GET /logs/scriptid/<script_id>/recent`                                                                                 |
+| every run, newest first                                           | `GET /logs/orgId/<VIASOCKET_ORG_ID>?projectId=<project_id>&scriptId=<script_id>&page=1&limit=40` → `data.finalResponse` |
+| pause, resume, delete                                             | `PUT /projects/<project_id>/scripts/<script_id>/status?status=2`, `1`, `0`                                              |
+
+A `plugin` trigger is subscribed with the app the moment Save Trigger answers, draft or not: delete the flow to
+stop it. A cron runs in the workspace's timezone unless Save Trigger gets `timezone` ("Asia/Kolkata").
+
+**Edit** = Get Flow → change → Save Steps with every step. A step left out is deleted. If Get Flow answers
+`steps: []` for a flow you know has steps, the read failed: do not Save Steps; check the sign-in and read again.
 
 Before Create Empty Flow, Save Trigger and Save Steps, say what will be saved and wait for the yes. The reads and the
 two Build calls need no confirmation.
@@ -127,21 +143,10 @@ their real account), and call it after a yes.
 
 ## Step code
 
-Each step is one JavaScript string run in viaSocket's VM; its `return` value is the step's result, read by later steps
-at `context.res.<stepname>`; the trigger's payload is `context.req.body`.
-
-- `stepname`: lowercase letters, digits, `_`; starts with a letter; unique.
-- In scope: the registered actions (called by `name` with `{ inputData }`), `context`, `fetch`, `axios`, `await`. No
-  `import`, no npm packages. 58 seconds per run.
-- Read context by full path where used (`context?.res?.fetch_news?.content`), never copied into a local first; map the
-  paths from Build Trigger Input's `trigger_response` and Build Action Input's `response_schema`, not from guesses.
-- No `try/catch`: `if` guards. A failed step's result becomes `{ "error": {} }` and later steps still run, so check
-  `context.res.<stepname>?.error` before using a result.
-- `inputData` exactly as Build Action Input returned it, with context values interpolated.
-- `console.log` lines in markdown with real values, for the flow's history page; never a secret.
-- End with a `return` later steps can rely on. One decision or action per step; small steps over one branching step.
-- Text that varies per input (replies, summaries) is the Run AI Model action's job (built-in, `auth_id` `"NoAuth"`:
-  `https://viasocket.com/docs/skill/built-in-actions.md`); code does calculation and mapping.
+The same rules as a flow built for a product (https://viasocket.com/docs/automations.md, "The steps" and "The VM"):
+one JavaScript string per step, its `return` read by later steps at `context.res.<stepname>`, the trigger payload at
+`context.req.body`, no `try/catch`, no `import`, 58 seconds, `console.log` lines in markdown. Here the
+`inputData` comes from Build Action Input, with context values interpolated:
 
 ```js
 // a step: the action registered as sendMessage, inputData from Build Action Input

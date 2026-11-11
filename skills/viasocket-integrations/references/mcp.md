@@ -34,11 +34,11 @@ so each tool call reaches the product's API as that user, and nothing per user i
 updates it, keeps the ids of what it made, and tests the URL:
 
 ```bash
-npx -y viasocket-apps mcp
+npx -y viasocket-apps mcp --no-open
 ```
 
-It signs them in when `.env` has no `VIASOCKET_AGENT_TOKEN` (the same one click as the setup command; tell them:
-"Sign in to viaSocket in the tab that opened (or sign up), pick your company if it asks, and click **Allow**"),
+It signs them in when `.env` has no `VIASOCKET_AGENT_TOKEN` (the same one click as the setup command: it prints a
+sign-in link; give it to them as the one thing to do, "Sign in here: <link>, pick your workspace, click **Allow**"),
 mints `VIASOCKET_MCP_TOKEN` from it and keeps it in `.env`, and never prints a secret. Signed in through the viaSocket MCP
 server instead: mint the token with its `call_any_read_api_of_viasocket` tool (`GET
 https://flow-api.viasocket.com/mcp/agent-token`, `Authorization` empty), write `data.token` to `.env` as

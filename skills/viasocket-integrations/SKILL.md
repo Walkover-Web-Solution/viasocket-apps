@@ -17,7 +17,7 @@ compatibility: >-
   reference). Any language; the viasocket-apps package runs on Node 20+, Bun, Deno and edge runtimes.
 metadata:
   author: viaSocket
-  version: '2026-11-05.1'
+  version: '2026-11-11.1'
 ---
 
 # viaSocket
@@ -46,6 +46,9 @@ page and follow it whole. Every page says exactly which calls to make and what e
 - **"Give each of my users their own automations", "a button that starts a daily summary at 9".** A workflow created
   per user by the product's code, from a template the product decides: https://viasocket.com/docs/automations.md.
   Users who build their own, in ready screens inside the product: https://viasocket.com/docs/embed.md.
+  A form the user filled that runs once per item of what the product posts: the same page, `runOncePerItem`.
+- **"Replace the prebuilt UI with our own screens."** Same user ids, old flows keep running, one feature at a
+  time: references/going-native.md.
 - **"An assistant in my product", "an AI behind this feature".** Any model, with the product's own endpoints and any
   MCP server as its tools; it reads the images, videos, audio and documents users attach:
   https://viasocket.com/docs/ai.md. Memory of each user's facts, rules and corrections, which they can see and
@@ -107,22 +110,22 @@ by what you can do, never by your name. Never list the ways to them or ask them 
 
 1. **The viaSocket MCP server is already connected** (`get_org_details_by_token` is in your tool list and answers an
    org): you are signed in to their account. For a product's users you still need its three keys: way 2 when you
-   can run a command, else way 4's keys page. When it answers that its sign-in lapsed: for a product's users, go to
-   way 4's keys page; for their own account, ask once for a reconnect with the exact link to your own client's
-   connector settings (Claude.ai: https://claude.ai/settings/connectors), and if they cannot, way 4.
+   can run a command, else way 4's keys page. When a tool answers that it needs a sign-in: say nothing about it; give
+   them the next way's link as the one thing to do (way 2 when you can run a command, else way 3, else way 4).
 2. **You can run a command on the machine where their browser is** (a local agent, such as Claude Code, Cursor or
    Codex). A sandbox in the cloud is not that machine: its sign-in comes back to a `127.0.0.1` their browser cannot
    reach. In the project folder, with Node.js 20+ and nothing to install:
-   - a product's users are involved: `npx -y viasocket-apps setup`
-   - only they are: `npx -y viasocket-apps login`
+   - a product's users are involved: `npx -y viasocket-apps setup --no-open`
+   - only they are: `npx -y viasocket-apps login --no-open`
 
-   It opens viaSocket in their browser. Tell them: "Sign in to viaSocket in the tab that opened (or sign up), pick
-   your company if it asks, and click **Allow**." On Allow, `.env` holds what the work needs, and you never see a
-   secret.
+   It prints a sign-in link and waits five minutes. Give them the link as the one thing to do: "Sign in here:
+   <link>, pick your workspace, click **Allow**." Never open their browser for them (`--no-open` is what stops it:
+   a tab that opens on its own loses the chat), and never describe a sign-in that failed or ran out: hand the link
+   again. On Allow, `.env` holds what the work needs, and you never see a secret.
 
 3. **You can add an MCP server yourself but not run a command**: add `https://connect.viasocket.com/mcp`; they sign
    in with one click when it asks. Then you are in way 1. When only they could add it (a chat client's settings),
-   ask once, with the exact link to those settings; if they do not know what that is, way 4.
+   give the exact link to those settings as the one thing to do; if they do not know what that is, way 4.
 4. **Neither**: send them to the page that holds exactly what you need. Each page signs them in (or up) and lands on
    the values with one **Copy** button. Say: "Open this link, sign in, click Copy, and paste it into <the exact
    place>."
@@ -172,8 +175,9 @@ the package's calls.
 
 ## On every job
 
-- **Secrets stay on the server:** every key, token and id viaSocket gives. A `script_id` is one of them: whoever
-  holds it runs that user's app with no token. Never in client code, a URL, a committed file, a tool definition or a
+- **Secrets stay on the server:** every key, token and id viaSocket gives. A `script_id` (the id of a flow viaSocket
+  made for one user: an enabled app, a subscription, an automation) is one of them: whoever holds it runs that user's
+  app with no token. Never in client code, a URL, a committed file, a tool definition or a
   log, and one user's ids are used only on that user's own requests. The one value a browser may hold is the per-user
   embed token, where a page says so.
 - **Plan, then a yes, then code.** Wait for the yes and apply what they changed; a yes with changes is a yes.
@@ -197,6 +201,6 @@ End with: what was built; each line of the page's "Finished when", where it has 
 marked `VIASOCKET-PENDING` and why; one real call's response; what was reported to viaSocket; and anything left for
 them (a value only they know, a sign-in only they can do).
 
-Skill version `2026-11-05.1`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
+Skill version `2026-11-11.1`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
 
 END OF PAGE

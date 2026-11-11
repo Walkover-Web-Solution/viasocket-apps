@@ -6,7 +6,8 @@ Here the product acts in its users' apps and hears from them. With the user's `a
 (connect.md) it reads options from their account, runs the app's actions and reacts
 to its events. Every key decided on this page is a question the user is never asked twice, or an action that never
 fails on a guessed value. Code names the app by its **slug** (`gmail`), an action or trigger by its **key**
-(`Send_Email`) and a version by its number (`v55`): no row id is ever copied into code.
+(`Send_Email`) and a version by its number (`v55`) when it runs an action; a row id (`action_id`) only where a page says
+so (a flow step, a sample event).
 
 Every function named here (`findEnabledApp`, `runAction`, …) is defined in https://viasocket.com/docs/apps-api.md:
 copy its module once.
@@ -19,7 +20,8 @@ copy its module once.
    (add `search=<words>` as a query parameter to filter them). Choose the action or trigger the task needs.
 3. **The action's or trigger's page,** linked from the app's: its key and version, its `inputData` as a TypeScript type.
 4. **At run time,** `listActions(userId, '<app_slug>')` is the same list from viaSocket itself: each event's `key`, its
-   published `version` and every `versions` entry. Read keys from it or from the page, never from memory.
+   published `version`, every `versions` entry, and `pauses` (`null`, or why a step with it waits). Read keys from it or
+   from the page, never from memory.
 
 ## The tags on an action's keys
 
@@ -33,8 +35,16 @@ The action's page tags some keys of `inputData`:
 
 ## The order
 
-Enabling an app creates one flow (its `script_id`) per user and app that runs any of that app's actions; do it once,
-store the `script_id`, and run every action through it. Each id comes from the step before it.
+**Flow or enabled app?** The action is known before it runs, fixed in the product's code or picked by the user in a
+form: make a flow (https://viasocket.com/docs/automations.md), one step that calls the action, the product's own API
+as the next step when it wants the result. Always a flow when the action's `pauses` in the listing is set
+(`intervention`: waits for a person; `delay`: waits a set time; `async`: waits for the app's callback): the flow stops
+after that step and the next step runs when the wait ends, which an enabled app's one-shot URL cannot do. Enable an
+app only when nobody knows the action until it runs: the product's AI picking from tool definitions.
+
+When it is the enabled app: enabling creates one flow (its `script_id`) per user and app that runs any of that
+app's actions; do it once, store the `script_id`, and run every action through it. Each id comes from the step before
+it.
 
 A `script_id` is a credential. Running an action through it needs no token: the id alone acts as that user on that
 app, which is why the server sends no embed token at run time. So the `auth_id`, the enabled app's `script_id` and

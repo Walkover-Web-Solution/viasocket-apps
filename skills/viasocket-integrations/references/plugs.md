@@ -63,7 +63,8 @@ With the token instead, make the same calls yourself:
 
 ## Finished when
 
-The guide's own checklist, plus: nothing published without their yes (and then private or public, their choice);
+The guide's own checklist, plus: nothing published before the guide's review and dry run pass, then published privately without asking (public
+only on their yes);
 `report_published` sent after a publish on their own plug; the report says what was built, what they still enter
 (credentials), what the dry run verified, and the Developer Hub link (`https://flow.viasocket.com/developer/<ORG_ID>`).
 
