@@ -635,7 +635,8 @@ test('listActions reads the app by its slug with the token, maps the listing, fi
   assert.equal(all.serviceId, 'rowo0bqrhj5g')
   assert.deepEqual(all.actions[0], {
     key: 'Send_Email', name: 'Send Email', type: 'action', description: 'Sends an email.', actionId: 'rowogelpy0h6', version: 'V55', actionVersionId: 'rowwj0sfmhub',
-    versions: [{ version: 'V55', actionVersionId: 'rowwj0sfmhub', status: 'published' }, { version: 'V54', actionVersionId: 'rowg2h7k0abc', status: 'published' }]
+    versions: [{ version: 'V55', actionVersionId: 'rowwj0sfmhub', status: 'published' }, { version: 'V54', actionVersionId: 'rowg2h7k0abc', status: 'published' }],
+    pauses: null
   })
   const triggers = await user.listActions('gmail', { type: 'trigger' })
   assert.deepEqual(triggers.actions.map((action) => action.key), ['New_Email_Arrives'])

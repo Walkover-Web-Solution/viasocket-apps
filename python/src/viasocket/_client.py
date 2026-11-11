@@ -109,15 +109,16 @@ class ViaSocket:
         self._service_ids: Dict[str, str] = {}
         self._versions: Dict[str, "tuple[float, Optional[dict]]"] = {}
         self._actions: Dict[str, "tuple[float, dict]"] = {}
+        self._automation_tokens: Dict[str, str] = {}
 
-    def _request(self, method: str, url: str, body: Any = None, token: Optional[str] = None, timeout: float = REQUEST_TIMEOUT) -> Any:
+    def _request(self, method: str, url: str, body: Any = None, token: Optional[str] = None, timeout: float = REQUEST_TIMEOUT, headers: Optional[Dict[str, str]] = None) -> Any:
         """
         The envelope `{ success, data }` is unwrapped and a refusal raised. A body is the envelope only
         when it has a boolean `success` and a `data` key (or is `success: false`): many actions answer
         with their own result at the top level, which is returned whole.
         """
         # urllib's default User-Agent is refused (403) by the catalog's firewall.
-        headers = {"Content-Type": "application/json", "User-Agent": "viasocket-python"}
+        headers = {"Content-Type": "application/json", "User-Agent": "viasocket-python", **(headers or {})}
         if token:
             headers["authorization"] = token
         data = None if body is None else (body if isinstance(body, bytes) else json.dumps(body).encode())
@@ -263,6 +264,59 @@ class ViaSocket:
             (flow["id"] for flow in self.list_flows(unique_identifier) if flow["service_id"] == service_id and flow["status"] in ("active", "paused")),
             None,
         )
+
+    # Automations built from code: https://viasocket.com/docs/automations.md. One flow per automation; create it
+    # once, keep its script_id, send every change to it. Saving the trigger and the steps publishes it.
+
+    def _automation_token(self, unique_identifier: str) -> str:
+        """The user's own token the Automation API takes (`GET /users/register`), derived once per user."""
+        token = self._automation_tokens.get(unique_identifier)
+        if not token:
+            data = self._request("GET", f"{self.api_base_url}/users/register", token=self.token_for(unique_identifier)) or {}
+            token = data.get("token")
+            if not token:
+                raise ViaSocketError("viaSocket answered /users/register without a token", body=data)
+            self._automation_tokens[unique_identifier] = token
+        return token
+
+    def _automation(self, unique_identifier: str, method: str, path: str, body: Any = None) -> Any:
+        return self._request(method, f"{self.api_base_url}{path}", body, headers={"proxy_auth_token": self._automation_token(unique_identifier)}) or {}
+
+    def create_flow(self, unique_identifier: str, title: str, description: Optional[str] = None) -> dict:
+        """An empty automation for the user: `{ script_id, title, status }`. Create it once; send every change to its script_id."""
+        body: Dict[str, Any] = {"title": _required("title", title)}
+        if description is not None:
+            body["description"] = description
+        return self._automation(unique_identifier, "POST", "/automations", body)
+
+    def set_trigger(self, unique_identifier: str, script_id: str, trigger: dict) -> dict:
+        """
+        Saves, or replaces, what starts the flow, in the automations page's names:
+        `{"triggerType": "webhook", "runOncePerItem": True, "arrayKey": "orders"}` (also `transformCode`, `customResponse`),
+        `{"triggerType": "cron", "cronStatement": "Every day at 9am", "timezone": "Asia/Kolkata"}`, or
+        `{"triggerType": "plugin", "trigger_id": "...", "auth_id": "...", "inputData": {}}`. Answers the saved trigger,
+        with `webhook_url` for a webhook. Another user's flow is a 403; a field the type does not take, a 400 naming it.
+        """
+        return self._automation(unique_identifier, "POST", f"/automations/{_required('script_id', script_id)}/trigger", dict(trigger))
+
+    def save_steps(self, unique_identifier: str, script_id: str, steps: List[dict]) -> dict:
+        """
+        Replaces every step and publishes the flow. Each step: `{"stepname", "code", "service_action_functions": [{"name", "auth_id", "action_id"}]}`
+        (`[]` for a step that only decides). A step left out is deleted: `read_flow` first when editing. Answers the flow as `read_flow` does.
+        """
+        if not steps:
+            raise ValueError("steps must be a non-empty list")
+        return self._automation(unique_identifier, "POST", f"/automations/{_required('script_id', script_id)}/steps", {"steps": list(steps)})
+
+    def read_flow(self, unique_identifier: str, script_id: str) -> dict:
+        """The flow as saved: `{ script_id, title, status, trigger, steps, variables, version, webhook_url_of_flow }`, each step with its code."""
+        return self._automation(unique_identifier, "GET", f"/automations/{_required('script_id', script_id)}")
+
+    def run_history(self, unique_identifier: str, script_id: str, page: int = 1, limit: int = 40) -> List[dict]:
+        """The flow's runs of the last 30 days, newest first (`status`, `requestTimestamp`, `output`, `console`, `stepOrderJsonData`). They appear about a minute after a run."""
+        query = f"projectId={self.project_id}&scriptId={urllib.parse.quote(_required('script_id', script_id))}&page={page}&limit={limit}"
+        data = self._automation(unique_identifier, "GET", f"/logs/orgId/{self.org_id}?{query}")
+        return list(data.get("finalResponse") or []) if isinstance(data, dict) else []
 
     def field_options(
         self,

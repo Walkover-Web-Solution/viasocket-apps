@@ -27,6 +27,8 @@ export interface RequestOptions {
   fetchImpl: typeof fetch
   /** Aborts the request; an abort is thrown as is, so a caller can tell a timeout from a refusal. */
   signal?: AbortSignal
+  /** More headers, as sent: the Automation API takes the user's own token as `proxy_auth_token`. */
+  headers?: Record<string, string>
 }
 
 /**
@@ -37,7 +39,7 @@ export interface RequestOptions {
 const shownUrl = (url: string) => url.replace(/\/func\/[^/?#]+/, '/func/<script_id>')
 
 export async function request<T = unknown>(options: RequestOptions): Promise<Envelope<T>> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers ?? {}) }
   if (options.token) headers.authorization = options.token
 
   let response: Response

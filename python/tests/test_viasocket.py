@@ -353,3 +353,70 @@ def test_a_failed_run_never_shows_the_script_id():
     assert "scriSECRET123" not in str(error.value)
     assert "/func/<script_id>" in str(error.value)
     assert _shown_url("https://flow.sokt.io/func/scriSECRET123?x=1") == "https://flow.sokt.io/func/<script_id>?x=1"
+
+
+# ---- Automations built from code: https://viasocket.com/docs/automations.md
+
+
+def make_automation_client():
+    calls = []
+    flow = {
+        "script_id": "scriQw8RtY2u",
+        "title": "Daily summary",
+        "status": "active",
+        "trigger": {"type": "trigger", "triggerType": "webhook", "webhook_url": "https://flow.sokt.io/func/scriQw8RtY2u", "runOncePerItem": True},
+        "steps": [{"stepname": "note", "code": "return 1", "service_action_functions": []}],
+        "variables": [],
+        "version": "1.1.0",
+        "webhook_url_of_flow": "https://flow.sokt.io/func/scriQw8RtY2u",
+    }
+
+    def transport(method, url, headers, body, timeout):
+        calls.append({"method": method, "url": url, "headers": headers, "body": json.loads(body) if body else None})
+        if url.endswith("/users/register"):
+            return 201, json.dumps({"success": True, "data": {"token": "proxy-token-abc", "user_id": 1}})
+        if url.endswith("/automations"):
+            return 201, json.dumps({"success": True, "data": {"script_id": "scriQw8RtY2u", "title": "Daily summary", "status": "draft"}})
+        if url.endswith("/automations/scriQw8RtY2u/trigger"):
+            return 200, json.dumps({"success": True, "data": {"script_id": "scriQw8RtY2u", "status": "draft", "triggerType": "webhook", "webhook_url": "https://flow.sokt.io/func/scriQw8RtY2u", "runOncePerItem": True, "arrayKey": "orders"}})
+        if url.endswith("/automations/scriQw8RtY2u/steps"):
+            return 201, json.dumps({"success": True, "data": flow})
+        if url.endswith("/automations/scriQw8RtY2u"):
+            return 200, json.dumps({"success": True, "data": flow})
+        if "/logs/orgId/o?" in url:
+            return 200, json.dumps({"success": True, "data": {"finalResponse": [{"flowHitId": "flh1", "status": "success", "output": "1"}]}})
+        if url.endswith("/automations/scriOther0000/trigger"):
+            return 403, json.dumps({"success": False, "message": "Sorry, You are not authorized to access this flow!"})
+        return 200, json.dumps({"success": True, "data": {"ok": True}})
+
+    return ViaSocket("o", "p", "s", transport=transport), calls
+
+
+def test_automations_use_the_users_own_token_from_register_and_the_routes():
+    viasocket, calls = make_automation_client()
+    created = viasocket.create_flow("user_123", "Daily summary", description="what the user sees")
+    assert created["script_id"] == "scriQw8RtY2u"
+    assert calls[0]["url"].endswith("/users/register") and calls[0]["headers"]["authorization"] == viasocket.token_for("user_123")
+    assert calls[1]["url"].endswith("/automations") and calls[1]["method"] == "POST"
+    assert calls[1]["headers"]["proxy_auth_token"] == "proxy-token-abc" and "authorization" not in calls[1]["headers"]
+    assert calls[1]["body"] == {"title": "Daily summary", "description": "what the user sees"}
+
+    trigger = viasocket.set_trigger("user_123", "scriQw8RtY2u", {"triggerType": "webhook", "runOncePerItem": True, "arrayKey": "orders"})
+    assert trigger["webhook_url"] == "https://flow.sokt.io/func/scriQw8RtY2u" and trigger["arrayKey"] == "orders"
+    assert calls[-1]["body"] == {"triggerType": "webhook", "runOncePerItem": True, "arrayKey": "orders"}
+
+    flow = viasocket.save_steps("user_123", "scriQw8RtY2u", [{"stepname": "note", "code": "return 1", "service_action_functions": []}])
+    assert flow["status"] == "active" and flow["steps"][0]["code"] == "return 1"
+    assert calls[-1]["body"] == {"steps": [{"stepname": "note", "code": "return 1", "service_action_functions": []}]}
+    with pytest.raises(ValueError):
+        viasocket.save_steps("user_123", "scriQw8RtY2u", [])
+
+    assert viasocket.read_flow("user_123", "scriQw8RtY2u")["webhook_url_of_flow"] == "https://flow.sokt.io/func/scriQw8RtY2u"
+    runs = viasocket.run_history("user_123", "scriQw8RtY2u", limit=10)
+    assert runs[0]["status"] == "success"
+    assert calls[-1]["url"].endswith("/logs/orgId/o?projectId=p&scriptId=scriQw8RtY2u&page=1&limit=10")
+    assert sum(1 for call in calls if call["url"].endswith("/users/register")) == 1, "the token is derived once per user"
+
+    with pytest.raises(ViaSocketError) as refused:
+        viasocket.set_trigger("user_123", "scriOther0000", {"triggerType": "webhook"})
+    assert refused.value.status == 403

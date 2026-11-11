@@ -1,6 +1,6 @@
 {
   "name": "viasocket-apps",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "viaSocket for your product and your coding agent: let your users connect any of 2,300+ apps, run actions and react to events; an AI assistant on any model with your endpoints as tools; AI memory per user; login, teams and organisations; automations per user; plus the skill for building your own automations and plugs on viaSocket, and `npx viasocket-apps login`.",
   "keywords": [
     "viasocket",
@@ -74,8 +74,10 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/finish-build.mjs",
-    "test": "npm run build && node --test test/token.test.mjs test/client.test.mjs test/browser.test.mjs test/cli.test.mjs test/langchain.test.mjs test/mcp.test.mjs test/ai-sdk.test.mjs test/openai-agents.test.mjs",
-    "prepublishOnly": "npm test"
+    "test": "npm run build && node --test test/token.test.mjs test/client.test.mjs test/automations.test.mjs test/browser.test.mjs test/cli.test.mjs test/langchain.test.mjs test/mcp.test.mjs test/ai-sdk.test.mjs test/openai-agents.test.mjs",
+    "prepublishOnly": "npm test",
+    "sync-skill": "node scripts/sync-skill.mjs",
+    "check-skill": "node scripts/sync-skill.mjs --check"
   },
   "devDependencies": {
     "@langchain/core": "^1.3.1",

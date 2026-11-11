@@ -50,7 +50,8 @@ The agent gets the three values a product needs (`VIASOCKET_ORG_ID`, `VIASOCKET_
 and they are in `.env`. Without a terminal it sends you to **Integrations → the embed → Install Code**,
 where they sit with Copy buttons.
 [skills/viasocket-integrations/SKILL.md](skills/viasocket-integrations/SKILL.md) is the skill itself,
-with its reference pages beside it, so what you install is what the security audits read. It names
+with its reference pages beside it, so what you install is what the security audits read. The folder is
+rebuilt from the served skill by `npm run sync-skill` (a workflow runs it every six hours), never edited by hand. It names
 the live skill, `https://viasocket.com/docs/skill.md`, and tells the agent to follow that one whenever
 its version is newer, so an install never goes stale.
 
@@ -183,6 +184,21 @@ const subscription = await user.subscribe('slack', 'New_Message', {
 
 // 6. Your own code with the user's connection, for an API the app's actions do not cover.
 const profile = await viasocket.runCode(scriptId, 'const r = await axios.get("https://gmail.googleapis.com/gmail/v1/users/me/profile"); return r.data')
+
+// 7. An automation of the user's own: a flow with a trigger and steps, built from code. The product
+//    posts { orders: [...] } to the flow's URL and it runs once per order; each step is JavaScript that
+//    calls the actions it registers. Known action: a flow. The product's AI picking the action at run
+//    time: the enabled app above. See https://viasocket.com/docs/automations.md.
+const { scriptId: flowId } = await user.createFlow({ title: 'Thank-you note per order' })
+const { webhookUrl } = await user.setTrigger(flowId, { triggerType: 'webhook', runOncePerItem: true, arrayKey: 'orders' })
+await user.saveSteps(flowId, [
+  {
+    stepname: 'note',
+    code: 'return await askAi({ inputData: { query: `One-line thank-you for an order of ${context.req.body.item}` } })',
+    serviceActionFunctions: [{ name: 'askAi', authId: 'NoAuth', actionId: 'rowskkqydb6f' }] // Run AI Model, no sign-in
+  }
+])
+// Later: user.readFlow(flowId) before changing steps; user.runHistory(flowId) for what each run did.
 ```
 
 ## Browser
@@ -535,7 +551,7 @@ The screens, the callback and the setup are in
 | --- | --- |
 | `viasocket.user(id, { memorySpaces })` | Scope every call below to one end user. `memorySpaces` grants shared AI-memory spaces (`{ 'teams/acme': 'append' }`); omit it for none. |
 | `user.token()` | Signed embed token for that user; hand it to the frontend. |
-| `user.listActions(app, { type })` | The app's actions and triggers by its slug (`'gmail'`): each one's `key`, published `version` and every version, plus the app's `serviceId`. What every call below names things by. Cached 10 minutes. |
+| `user.listActions(app, { type })` | The app's actions and triggers by its slug (`'gmail'`): each one's `key`, published `version`, every version, and `pauses` (why a flow waits after a step with it: `intervention`, `delay`, `async`, or `null`; an action that waits belongs in a flow step), plus the app's `serviceId`. What every call below names things by. Cached 10 minutes. |
 | `user.serviceIdFor(app)` | The app's `service_id` by its slug, read from the listing: what the connect popup takes. |
 | `user.enable(app, authId)` | Turn a connection into a `scriptId` for running the app's actions. Once per connection. `app` is the slug (a `service_id` still works, but that flow then takes only version ids). |
 | `user.findEnabled(app)` | The `scriptId` if this app is already enabled, else `null`. Call before `enable`. |
@@ -551,6 +567,11 @@ The screens, the callback and the setup are in
 | `viasocket.sampleEvent(triggerId, authId, authType, inputData?)` | One real event of a trigger for one connection: what a handler reads at `context.req.body`. Takes the `trigger_id`; `authType` is `service.auth_type`. Map from this, never from `sample_output`. |
 | `user.subscribe(app, trigger, { authId, inputData, version, code \| webhook, meta })` | Subscribe to an app event, by the app's slug and the trigger's key, with a handler we run per event. Returns `{ scriptId, hookUrl, … }`. The id-based form `subscribe(triggerVersionId, params)` still works. |
 | `user.updateSubscription(scriptId, { code, meta })` | Change a live subscription in place. |
+| `user.createFlow({ title, description })` | An empty automation for this user; answers its `scriptId`. One flow per automation: create it once, send every change to it. |
+| `user.setTrigger(scriptId, trigger)` | What starts it: `{ triggerType: 'webhook', runOncePerItem, arrayKey, transformCode, customResponse }`, `{ triggerType: 'cron', cronStatement, timezone }` or `{ triggerType: 'plugin', triggerId, authId, inputData }`. Answers the saved trigger, with `webhookUrl` for a webhook. |
+| `user.saveSteps(scriptId, steps)` | Replaces every step (`{ stepname, code, serviceActionFunctions: [{ name, authId, actionId }] }`) and publishes the flow. A step left out is deleted: `readFlow` first when editing. |
+| `user.readFlow(scriptId)` | The flow as saved: trigger, every step with its code, variables, version. |
+| `user.runHistory(scriptId, { page, limit })` | The flow's runs of the last 30 days, newest first: `status`, `requestTimestamp`, `output`, `console`, `steps`. Runs appear about a minute after they happen. |
 | `user.listFlows()` | Every enabled app, subscription and automation this user has, each `active`, `paused` or `deleted`. |
 | `user.setFlowStatus(scriptId, n)` | Pause (`2`), resume or restore (`1`), or delete (`0`) one flow. Setting the state it is already in succeeds. |
 | `user.disableFlow(scriptId)` / `user.enableFlow(scriptId)` / `user.deleteFlow(scriptId)` | Pause, resume, delete. |

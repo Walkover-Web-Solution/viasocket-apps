@@ -8,6 +8,7 @@
  * reader has to remember.
  */
 
+import { stepBody, toFlow, toRun, toTriggerResult, triggerBody } from './automations.js'
 import { ViaSocketError } from './errors.js'
 import { request } from './http.js'
 import { removeMcpServer, syncMcpServer } from './mcp.js'
@@ -35,6 +36,11 @@ import type {
   Envelope,
   Flow,
   MemoryToken,
+  AutomationFlow,
+  AutomationRun,
+  AutomationStep,
+  AutomationTrigger,
+  AutomationTriggerResult,
   FlowStatus,
   ListActionsParams,
   ListOptionsParams,
@@ -42,7 +48,9 @@ import type {
   ListOptionsResult,
   LoginUser,
   Option,
+  Pauses,
   RenameFlowParams,
+  RunHistoryParams,
   RunActionOptions,
   RunCodeOptions,
   SubscribeParams,
@@ -471,6 +479,8 @@ export class UserScope {
   private memoryCache: { token: Promise<MemoryToken>; expiresAt: number } | undefined
   /** The MCP management token `mcp.*` reuses, until a minute before it runs out. */
   private mcpCache: { token: Promise<McpToken>; expiresAt: number } | undefined
+  /** The user's own token the Automation API takes, derived once per scope. */
+  private automationTokenPromise: Promise<string> | undefined
 
   constructor(
     private readonly client: ViaSocket,
@@ -536,6 +546,7 @@ export class UserScope {
         version?: string | null
         action_version_id?: string | null
         versions?: Array<{ version: string; action_version_id: string; status: string }>
+        pauses?: Pauses
       }>
     }>('GET', `/embed/services/${encodeURIComponent(slug)}/actions`)
     const actions: AppAction[] = (data.actions ?? []).map((action) => ({
@@ -546,7 +557,8 @@ export class UserScope {
       actionId: action.action_id,
       version: action.version ?? null,
       actionVersionId: action.action_version_id ?? null,
-      versions: (action.versions ?? []).map((row) => ({ version: row.version, actionVersionId: row.action_version_id, status: row.status }))
+      versions: (action.versions ?? []).map((row) => ({ version: row.version, actionVersionId: row.action_version_id, status: row.status })),
+      pauses: action.pauses ?? null
     }))
     return { app: data.service || slug, serviceId: data.service_id, actions }
   }
@@ -1058,5 +1070,68 @@ export class UserScope {
   /** Disconnects an app. Disable the flows built on it first, or they stop working. */
   async revokeConnection(authId: string): Promise<void> {
     await this.call('DELETE', `/embed/authentications/revoke/${required('authId', authId)}`)
+  }
+
+  // Automations built from code: https://viasocket.com/docs/automations.md. One flow per automation; create it
+  // once, keep its scriptId, send every change to it. Saving the trigger and the steps publishes it.
+
+  /** The user's own token the Automation API takes (`GET /users/register`), derived once per scope. */
+  private automationToken(): Promise<string> {
+    this.automationTokenPromise ??= (async () => {
+      const { data } = await this.call<{ token?: string }>('GET', '/users/register')
+      if (!data?.token) throw new ViaSocketError('viaSocket answered /users/register without a token', { status: null, body: data })
+      return data.token
+    })()
+    return this.automationTokenPromise
+  }
+
+  private async automationCall<T = unknown>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+    const { data } = await request<T>({
+      method,
+      url: `${this.client.apiBaseUrl}${path}`,
+      headers: { proxy_auth_token: await this.automationToken() },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      fetchImpl: this.client.transport
+    })
+    return data
+  }
+
+  /** An empty flow for this user; `title` and `description` are what they see. Answers its scriptId. */
+  async createFlow(params: { title: string; description?: string }): Promise<{ scriptId: string; title: string; status: string }> {
+    const body: Record<string, unknown> = { title: required('title', params?.title) }
+    if (params.description !== undefined) body.description = params.description
+    const data = await this.automationCall<{ script_id: string; title: string; status: string }>('POST', '/automations', body)
+    return { scriptId: data.script_id, title: data.title, status: String(data.status) }
+  }
+
+  /** Saves, or replaces, what starts the flow. Another user's flow is a 403; a field the trigger type does not take, a 400 naming it. */
+  async setTrigger(scriptId: string, trigger: AutomationTrigger): Promise<AutomationTriggerResult> {
+    const data = await this.automationCall<Record<string, unknown>>('POST', `/automations/${required('scriptId', scriptId)}/trigger`, triggerBody(trigger))
+    return toTriggerResult(data)
+  }
+
+  /** Replaces every step, then publishes the flow. A step left out is deleted: `readFlow` first when editing. */
+  async saveSteps(scriptId: string, steps: AutomationStep[]): Promise<AutomationFlow> {
+    if (!Array.isArray(steps) || !steps.length) throw new Error('steps must be a non-empty array')
+    const data = await this.automationCall<Record<string, unknown>>('POST', `/automations/${required('scriptId', scriptId)}/steps`, { steps: steps.map(stepBody) })
+    return toFlow(data)
+  }
+
+  /** The flow as saved: its trigger, every step with its code, the variables, the version. */
+  async readFlow(scriptId: string): Promise<AutomationFlow> {
+    const data = await this.automationCall<Record<string, unknown>>('GET', `/automations/${required('scriptId', scriptId)}`)
+    return toFlow(data)
+  }
+
+  /** The flow's runs of the last 30 days, newest first; they appear about a minute after a run. Another user's flow is a 403. */
+  async runHistory(scriptId: string, params: RunHistoryParams = {}): Promise<AutomationRun[]> {
+    const id = required('scriptId', scriptId)
+    const page = params.page ?? 1
+    const limit = params.limit ?? 40
+    const data = await this.automationCall<{ finalResponse?: Record<string, unknown>[] }>(
+      'GET',
+      `/logs/orgId/${this.client.orgId}?projectId=${this.client.projectId}&scriptId=${encodeURIComponent(id)}&page=${page}&limit=${limit}`
+    )
+    return (data?.finalResponse ?? []).map(toRun)
   }
 }

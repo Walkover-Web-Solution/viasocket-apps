@@ -85,7 +85,17 @@ export interface AppAction {
   actionVersionId: string | null
   /** Every version that can be named, newest first. */
   versions: Array<{ version: string; actionVersionId: string; status: string }>
+  /**
+   * Why a flow waits after a step with this action: a person's answer (`intervention`), a set time
+   * (`delay`) or the app's callback (`async`); `null` for an action that answers at once. An action that
+   * waits belongs in a flow step (`saveSteps`): through an enabled app's URL it answers at once, and the
+   * wait has nowhere to come back to.
+   */
+  pauses: Pauses
 }
+
+/** See `AppAction.pauses`. */
+export type Pauses = 'intervention' | 'delay' | 'async' | null
 
 export interface AppActions {
   /** The app's slug. */
@@ -185,6 +195,97 @@ export interface Flow {
 
 /** What `setFlowStatus` sets: `2` pauses, `1` resumes or restores, `0` deletes. */
 export type FlowStatus = 0 | 1 | 2
+
+/**
+ * What starts an automation (`setTrigger`), as the automations page names it:
+ * - `webhook`: the product POSTs to the flow's URL. `runOncePerItem` runs it once per element of the posted
+ *   array (`arrayKey` when the array sits under a key, `transformCode` when JavaScript over `context.req.body`
+ *   builds it; either turns `runOncePerItem` on). `customResponse` answers the caller with that text instead
+ *   of the last step's return; not with per-item runs.
+ * - `cron`: a schedule, five-field cron or plain words ("Every day at 9am"); `timezone` an IANA zone, the
+ *   workspace's own when left out.
+ * - `plugin`: an event of a connected app, by its `triggerId` from `listActions`; `authId` the user's
+ *   connection (left out for an app without sign-in); `inputData` the trigger's input.
+ */
+export type AutomationTrigger =
+  | { triggerType: 'webhook'; runOncePerItem?: boolean; arrayKey?: string; transformCode?: string; customResponse?: string }
+  | { triggerType: 'cron'; cronStatement: string; timezone?: string }
+  | { triggerType: 'plugin'; triggerId: string; authId?: string; inputData?: Record<string, unknown> }
+
+/** The saved trigger, as `setTrigger` and `readFlow` answer it. */
+export interface AutomationTriggerResult {
+  scriptId: string
+  /** `draft` until the steps are saved, then `active`. */
+  status: string
+  triggerType: 'webhook' | 'cron' | 'plugin'
+  /** The URL a `webhook` flow is POSTed to. */
+  webhookUrl?: string
+  runOncePerItem?: boolean
+  arrayKey?: string
+  transformCode?: string
+  customResponse?: string
+  cronStatement?: string
+  /** The schedule in viaSocket's words ("At 09:00 AM every day"): compare the meaning, not the text. */
+  schedule?: string
+  timezone?: string
+  triggerId?: string
+  authId?: string
+  inputData?: Record<string, unknown>
+  /** A real event of a `plugin` trigger, for mapping the steps. */
+  sampleData?: unknown
+}
+
+/** One step of an automation: JavaScript that runs in viaSocket's VM, with the actions it may call. */
+export interface AutomationStep {
+  /** Lowercase letters, digits and `_`; starts with a letter; unique in the flow. Later steps read `context.res.<stepname>`. */
+  stepname: string
+  /** One JavaScript string; its `return` is the step's result. The trigger's payload is `context.req.body`. */
+  code: string
+  /**
+   * The actions the code calls, each by the `name` the code uses (`sendMessage`), with the user's `authId`
+   * (`'NoAuth'` for an app without sign-in) and the action's `actionId` from `listActions`. `[]` for a step
+   * that only decides or transforms.
+   */
+  serviceActionFunctions?: Array<{ name: string; authId: string; actionId: string }>
+  description?: string
+}
+
+/** The flow as `readFlow` (and `saveSteps`) answers it. */
+export interface AutomationFlow {
+  scriptId: string
+  title: string
+  /** `draft`, `active`, `paused` or `deleted`. */
+  status: string
+  trigger: AutomationTriggerResult
+  steps: AutomationStep[]
+  variables: unknown[]
+  /** Moves on every save, changed or not. */
+  version: string
+  /** The URL a `webhook` flow is POSTed to. */
+  webhookUrl?: string
+}
+
+/** One run of an automation, newest first in `runHistory`; the fields a product reads, the rest as sent. */
+export interface AutomationRun {
+  flowHitId: string
+  /** `success` or `failed`. */
+  status: string
+  /** When the run started (ISO). */
+  requestTimestamp: string
+  /** The last step's result as a JSON string, or null. */
+  output: string | null
+  /** Each step's log lines, by step name. */
+  console: Record<string, string>
+  steps: Array<{ id: string; status: number; timeTaken: number }>
+  [key: string]: unknown
+}
+
+export interface RunHistoryParams {
+  /** 1-based. */
+  page?: number
+  /** Up to 40. */
+  limit?: number
+}
 
 export interface RenameFlowParams {
   title: string
