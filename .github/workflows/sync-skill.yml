@@ -1,0 +1,31 @@
+name: Sync skill copy
+
+# Keeps skills/viasocket-integrations/ equal to the skill viaSocket serves at https://viasocket.com/docs/skill.md,
+# so what `npx skills add Walkover-Web-Solution/viasocket-apps` and skills.sh install is never stale. Runs every
+# six hours and on demand; commits to main only when a page changed. Nothing is edited by hand in that folder.
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/sync-skill.mjs
+      - name: Commit when the served skill changed
+        run: |
+          if git diff --quiet -- skills; then echo "skill copy already current"; exit 0; fi
+          version=$(sed -n "s/^Skill version \`\([^\`]*\)\`, an installed copy.*/\1/p" skills/viasocket-integrations/SKILL.md)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add skills
+          git commit -m "Skill copy ${version}: synced from viasocket.com/docs"
+          git push
