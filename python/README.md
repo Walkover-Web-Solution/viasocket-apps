@@ -147,7 +147,7 @@ The client underneath names things the way the catalog does: the app by its slug
 its key, a version by its number. `user` is the unique identifier the user connected their apps under.
 
 ```python
-listing = viasocket.list_actions("user_123", "slack")          # {"app", "service_id", "actions": [{"key", "name", "version", ...}]}
+listing = viasocket.list_actions("user_123", "slack")          # {"app", "service_id", "actions": [{"key", "name", "version", "pauses", ...}]}
 
 # Once per user and app: the flow that runs its actions on their connection.
 script_id = viasocket.find_enabled("user_123", "slack")
@@ -164,6 +164,17 @@ while page["has_more"]:
 
 # Your webhook (or `code=` JavaScript) on every event of a trigger.
 viasocket.subscribe("user_123", "slack", "New_Message", auth_id="auth8f3a9c2d", webhook="https://example.com/hooks/slack")
+
+# An automation of the user's own, for an action known before it runs (an action whose "pauses" is set always
+# goes here): the product posts {"orders": [...]} to its URL and it runs once per order.
+flow = viasocket.create_flow("user_123", "Thank-you note per order")
+trigger = viasocket.set_trigger("user_123", flow["script_id"], {"triggerType": "webhook", "runOncePerItem": True, "arrayKey": "orders"})
+viasocket.save_steps("user_123", flow["script_id"], [{
+    "stepname": "note",
+    "code": "return await askAi({ inputData: { query: `One-line thank-you for ${context.req.body.item}` } })",
+    "service_action_functions": [{"name": "askAi", "auth_id": "NoAuth", "action_id": "rowskkqydb6f"}],  # Run AI Model
+}])
+# trigger["webhook_url"] is where the product posts; read_flow() and run_history() read it back.
 ```
 
 The `script_id` is the credential for `run_action` and `run_code`: keep it on your server.
