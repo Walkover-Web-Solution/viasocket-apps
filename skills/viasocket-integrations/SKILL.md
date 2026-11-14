@@ -17,7 +17,7 @@ compatibility: >-
   reference). Any language; the viasocket-apps package runs on Node 20+, Bun, Deno and edge runtimes.
 metadata:
   author: viaSocket
-  version: '2026-11-13.1'
+  version: '2026-11-14.1'
 ---
 
 # viaSocket
@@ -204,6 +204,6 @@ End with: what was built; each line of the page's "Finished when", where it has 
 marked `VIASOCKET-PENDING`, why, and its `requestId`; one real call's response; what was reported to viaSocket; and
 anything left for them (a value only they know, a sign-in only they can do).
 
-Skill version `2026-11-13.1`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
+Skill version `2026-11-14.1`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
 
 END OF PAGE

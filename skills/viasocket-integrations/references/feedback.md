@@ -44,6 +44,9 @@ event, with `reported: false`.
    `{ "requestId", "orgId" }` (the same `orgId` the report sent). At most once an hour, never in a loop. The answer's
    `status` and `next` say what to do: `received` or `building`, keep it unwired; `completed`, find it with the
    `serviceId` and `actionIds` it gives, wire the pending part, test it with a real call and remove the comment;
+   `waiting_for_connection`, viaSocket built it but could not connect it with its own account, so it is published
+   privately in their organisation: give the person the link Create Connection Link makes for that `serviceId` (the
+   connector's `create_connection_link`), and once they have connected, wire and test it as for `completed`;
    `needs_human` or `not_possible`, tell the person what its `message` says. Never report the same item again while
    its request is open.
 
