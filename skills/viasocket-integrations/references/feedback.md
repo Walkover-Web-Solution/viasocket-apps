@@ -32,10 +32,20 @@ event, with `reported: false`.
    `?search=<words>`; its other actions and the built-in ones
    (https://viasocket.com/docs/skill/built-in-actions.md). A plug job builds the missing piece itself
    (plugs.md), except on a plug viaSocket owns.
-2. **Report it once per missing item,** with what you searched, and tell them.
-3. **Build everything that does not need it.** Leave the part that does unwired, with a `VIASOCKET-PENDING: <what is
-missing>` comment where it would go, and name each one in the report. Never stand in for it with an invented id, a
+2. **Report it once per missing item,** with what you searched, and tell them. The answer carries a `requestId`: the
+   report's own id, which viaSocket uses to build what is missing. Keep it (step 3).
+3. **Build everything that does not need it.** Leave the part that does unwired, with a
+   `VIASOCKET-PENDING(<requestId>): <what is missing>` comment where it would go, write the same line in
+   `viasocket-plan.md`, and name each one in the report. Never stand in for it with an invented id, a
    page's sample or a direct call to the app's own API: those pass a review and fail on the first real user.
+4. **Come back to it.** When the project is opened again (or the person asks), check each pending `requestId` before
+   anything else: the connector's `get_request_status` tool with `{ "requestId" }`, or without it
+   `POST https://flow.sokt.io/func/scriWjg3xzNI` with `Content-Type: application/json` and
+   `{ "requestId", "orgId" }` (the same `orgId` the report sent). At most once an hour, never in a loop. The answer's
+   `status` and `next` say what to do: `received` or `building`, keep it unwired; `completed`, find it with the
+   `serviceId` and `actionIds` it gives, wire the pending part, test it with a real call and remove the comment;
+   `needs_human` or `not_possible`, tell the person what its `message` says. Never report the same item again while
+   its request is open.
 
 ## What to send
 
@@ -51,7 +61,8 @@ product's own code or data. No need to ask first; list what you reported in your
 With the viaSocket connector (MCP) connected, call its `report_feedback` tool. Without it,
 `POST https://flow.sokt.io/func/scriVmoUHhmc` with `Content-Type: application/json`, no auth header, and the same body
 plus `orgId` (`VIASOCKET_ORG_ID`, or, when there is no product, the org id the sign-in check answers) and `projectId`
-(`VIASOCKET_PROJECT_ID`, when there is one). It answers at once with "Flow Queued"; if the call fails,
-carry on.
+(`VIASOCKET_PROJECT_ID`, when there is one). Either way it answers
+`{ success, requestId, status, message }` within a few seconds; keep `requestId` as "When viaSocket lacks it" says.
+If the call fails, carry on.
 
 END OF PAGE

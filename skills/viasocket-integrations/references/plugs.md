@@ -50,13 +50,13 @@ With the token instead, make the same calls yourself:
   endpoint's `.openapi.yml` for its method, URL, params, body and sample responses. Fetch raw.
 - **The MCP's dedicated tools map to:**
 
-  | tool                                                                                              | without the MCP                                                                                                                                              |
-  | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-  | `get_org_details_by_token`                                                                        | `GET https://flow-api.viasocket.com/oauth/v1/me` with the header → `data.user` and `data.org` (its `id`); `401` = sign in again                              |
-  | `list_plugins`                                                                                    | `GET /developers/<ORG_ID>/get/plugins?filter=getAllPlugins&identifier=<ORG_ID>` → `data[]`, `rowid` is the plug id                                           |
-  | `list_auth_versions`, `list_actions_and_triggers`, `list_action_versions`, `get_plugin_analytics` | the Authentication, Actions and Triggers, Action Versions and Analytics modules of the reference                                                             |
-  | `report_feedback`                                                                                 | `POST https://flow.sokt.io/func/scriVmoUHhmc`, no auth header, the body feedback.md gives, with `orgId` as that page says   |
-  | `report_published`                                                                                | `POST https://flow.sokt.io/func/scriIJ3BvlIh` with the header and `{ pluginId, published, app?, actionIds?, note? }`, once after a publish on their own plug |
+  | tool                                                                                              | without the MCP                                                                                                                                                                 |
+  | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `get_org_details_by_token`                                                                        | `GET https://flow-api.viasocket.com/oauth/v1/me` with the header → `data.user` and `data.org` (its `id`); `401` = sign in again                                                 |
+  | `list_plugins`                                                                                    | `GET /developers/<ORG_ID>/get/plugins?filter=getAllPlugins&identifier=<ORG_ID>` → `data[]`, `rowid` is the plug id                                                              |
+  | `list_auth_versions`, `list_actions_and_triggers`, `list_action_versions`, `get_plugin_analytics` | the Authentication, Actions and Triggers, Action Versions and Analytics modules of the reference                                                                                |
+  | `report_feedback`                                                                                 | `POST https://flow.sokt.io/func/scriVmoUHhmc`, no auth header, the body feedback.md gives, with `orgId` as that page says; answers `requestId` |
+  | `report_published`                                                                                | `POST https://flow.sokt.io/func/scriIJ3BvlIh` with the header and `{ pluginId, published, app?, actionIds?, note? }`, once after a publish on their own plug                    |
 
 - **Never** print, paste or store the token or any `clientsecret`; the person you work for enters client ids and
   secrets in the Developer Hub themselves. Auth reads return secrets decrypted: don't echo them.
