@@ -48,6 +48,9 @@ With the token instead, make the same calls yourself:
 - **Which endpoint, URL, filter and body:** the API reference the MCP reads is public. Start at
   `https://app.docstar.io/p/llms.txt?collectionId=eInXd9-ETenX` (the modules), open one module's `llms.txt`, then the
   endpoint's `.openapi.yml` for its method, URL, params, body and sample responses. Fetch raw.
+- **Metadata:** the guide's metadata steps apply unchanged without the MCP: every create and update writes its
+  `aiLogs` entry (`CREATED_BY_SKILL` / `UPDATED_BY_SKILL`, never a model name) with `"via": "token"`. Skip it and the
+  plug is counted as built by a person.
 - **The MCP's dedicated tools map to:**
 
   | tool                                                                                              | without the MCP                                                                                                                                                                 |
