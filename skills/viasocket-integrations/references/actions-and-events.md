@@ -39,7 +39,8 @@ The action's page tags some keys of `inputData`:
 form: make a flow (https://viasocket.com/docs/automations.md), one step that calls the action, the product's own API
 as the next step when it wants the result. Always a flow when the action's `pauses` in the listing is set
 (`intervention`: waits for a person; `delay`: waits a set time; `async`: waits for the app's callback): the flow stops
-after that step and the next step runs when the wait ends, which an enabled app's one-shot URL cannot do. Enable an
+after that step and the next step runs when the wait ends, which an enabled app's one-shot URL cannot do
+(ai-steps.md). Enable an
 app only when nobody knows the action until it runs: the product's AI picking from tool definitions.
 
 When it is the enabled app: enabling creates one flow (its `script_id`) per user and app that runs any of that

@@ -22,6 +22,9 @@ Run it in the project folder (Node.js 20+, nothing to install):
 npx -y viasocket-apps setup --no-open
 ```
 
+Only on the machine their browser can reach: in a cloud sandbox the link it prints comes back to that sandbox's
+`127.0.0.1` and never completes, so take the connector section or the keys page instead.
+
 It prints a sign-in link and waits up to five minutes. Give them the link as the one thing to do (never open their
 browser for them; never describe a sign-in that failed: hand the link again):
 
@@ -30,7 +33,8 @@ browser for them; never describe a sign-in that failed: hand the link again):
 When they click Allow, it:
 
 - writes `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET` and `VIASOCKET_AGENT_TOKEN` (their own
-  token) into `.env`;
+  token) into `.env`. The deployed server needs the first three only: the agent token is the person's own and stays
+  on the machine where the work is done;
 - picks the embed project and prints it: the one already in `.env`, else the workspace's only embed, else a new one
   named after the folder (`--name <title>` names it). `--new` always makes a new one: one embed per product, so a
   second product in the same workspace gets its own;
@@ -95,6 +99,7 @@ A list (empty until someone connects) means setup is right; a 401 means the secr
 
 A call failing with `host_not_allowed` means a blocked host: ask once to allow `viasocket.com`, `registry.npmjs.org`,
 `flow.viasocket.com`, `flow-api.viasocket.com`, `flow.sokt.io`, `plug-service.viasocket.com`, `connect.viasocket.com`,
+`36blocks.com`, `routes.msg91.com`, `proxy.msg91.com` (login and organisations),
 `mcp.viasocket.com`, `memory-api.viasocket.com` and `app.docstar.io`; until then, ask them to run each request and
 paste the response. Only `serviceIdFor` and the catalog list use `plug-service.viasocket.com`: while it is blocked,
 every app's page gives its `service_id`, so the rest can be tested; the product's server still calls `serviceIdFor`.

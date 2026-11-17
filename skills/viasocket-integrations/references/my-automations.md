@@ -126,7 +126,7 @@ the MCP: `Authorization` empty), `<project_id>` being `proj<VIASOCKET_ORG_ID>` u
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | the last run and each step's result (about a minute after it ran) | `GET /logs/scriptid/<script_id>/recent`                                                                                 |
 | every run, newest first                                           | `GET /logs/orgId/<VIASOCKET_ORG_ID>?projectId=<project_id>&scriptId=<script_id>&page=1&limit=40` → `data.finalResponse` |
-| pause, resume, delete                                             | `PUT /projects/<project_id>/scripts/<script_id>/status?status=2`, `1`, `0`                                              |
+| pause (`status=2`), resume (`1`), delete (`0`)                    | `PUT /projects/<project_id>/scripts/<script_id>/status?status=2`, `1`, `0`                                              |
 
 A `plugin` trigger is subscribed with the app the moment Save Trigger answers, draft or not: delete the flow to
 stop it. A cron runs in the workspace's timezone unless Save Trigger gets `timezone` ("Asia/Kolkata").
@@ -134,8 +134,9 @@ stop it. A cron runs in the workspace's timezone unless Save Trigger gets `timez
 **Edit** = Get Flow → change → Save Steps with every step. A step left out is deleted. If Get Flow answers
 `steps: []` for a flow you know has steps, the read failed: do not Save Steps; check the sign-in and read again.
 
-Before Create Empty Flow, Save Trigger and Save Steps, say what will be saved and wait for the yes. The reads and the
-two Build calls need no confirmation.
+Before Create Empty Flow, Save Trigger and Save Steps, say what will be saved and wait for the yes. The reads and
+Build Trigger Input need no confirmation; Build Action Input runs the action once for real, so it needs a yes when the
+action writes.
 
 While building a workflow, Run Action Once is not a way to resolve names: Build Trigger Input and Build Action Input
 already resolve names to ids. Only when they can't, offer it, say exactly what it will do (it runs a real action on
@@ -145,7 +146,8 @@ their real account), and call it after a yes.
 
 The same rules as a flow built for a product (https://viasocket.com/docs/automations.md, "The steps" and "The VM"):
 one JavaScript string per step, its `return` read by later steps at `context.res.<stepname>`, the trigger payload at
-`context.req.body`, no `try/catch`, no `import`, 58 seconds, `console.log` lines in markdown. Here the
+`context.req.body`, no `try/catch`, no `import`, 58 seconds, `console.log` lines in markdown. Which AI action
+for which job, and a step whose reply comes later: ai-steps.md. Here the
 `inputData` comes from Build Action Input, with context values interpolated:
 
 ```js

@@ -34,10 +34,11 @@ command to run (a builder), this is the one thing left in the report, asked once
 With Node.js 20+ in the project folder (the three keys in `.env`):
 
 ```bash
-npx -y viasocket-apps connect <app_slug> --user apps-api-test-user
+npx -y viasocket-apps connect <app_slug> --user apps-api-test-user --no-open
 ```
 
-It serves a one-button page on `127.0.0.1` that opens viaSocket's Connect popup for that app, prints the page's URL,
+It serves a one-button page on `127.0.0.1` that opens viaSocket's Connect popup for that app, prints the page's URL
+(`--no-open`: printed, never opened in their browser by the command),
 and when the sign-in lands it enables the app for that user (or finds it already enabled). Ask them to open the URL it
 prints, click Connect and sign in.
 

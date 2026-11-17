@@ -46,7 +46,7 @@ It prints a sign-in link and waits up to five minutes. Give them the link as the
 > Sign in here: <link>, pick your workspace, and click **Allow**.
 
 On Allow it writes `VIASOCKET_AGENT_TOKEN` and `VIASOCKET_ORG_ID` to `.env`, checks them with viaSocket, prints the
-workspace and exits 0. You never see the token.
+workspace and exits 0. Nothing is printed; the calls read the token from `.env`.
 
 - Always `--no-open`: without it the command opens a tab in their browser by itself, and people lose the chat.
   Run it in the background when your environment runs commands to completion, and read `.env` once it exits.

@@ -95,15 +95,16 @@ Claude.ai and ChatGPT reach a login server only through the product's OAuth, and
 but no OAuth. Then the product gets two small endpoints of its own, on top of the login it already has; viaSocket
 calls them and nothing else changes for its users:
 
-| endpoint                                            | receives                                                                                                                                        | answers                                                                                                                              |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `loginUrl`, a page (`GET`)                          | `client_id`, `redirect_uri`, `response_type=code`, `state`, maybe `scope`                                                                       | after the user signs in with the product's own login: a redirect to `redirect_uri` with `code` and the same `state`, or with `error` |
-| `tokenUrl` (`POST`, a JSON body, within 10 seconds) | `client_id`, `client_secret`, `grant_type: "authorization_code"`, `code`, `redirect_uri`; or `grant_type: "refresh_token"` with `refresh_token` | `{ "access_token", "expires_in", "refresh_token" }`; only `access_token` is required                                                 |
+| endpoint                                            | receives                                                                                                                                        | answers                                                                                                                                                                                                           |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loginUrl`, a page (`GET`)                          | `client_id`, `redirect_uri`, `response_type=code`, `state`, maybe `scope`                                                                       | after the user signs in with the product's own login and clicks **Allow** on a line that names what is asking (the client's name): a redirect to `redirect_uri` with `code` and the same `state`, or with `error` |
+| `tokenUrl` (`POST`, a JSON body, within 10 seconds) | `client_id`, `client_secret`, `grant_type: "authorization_code"`, `code`, `redirect_uri`; or `grant_type: "refresh_token"` with `refresh_token` | `{ "access_token", "expires_in", "refresh_token" }`; only `access_token` is required                                                                                                                              |
 
 - The `access_token` is the product's own token, the one its API already takes. viaSocket forwards it to the tools as
   it is, and `validationUrl` must answer 200 for it, so `validationUrl` stays in the definition in this mode too.
 - A `code` is good for one use and a few minutes; check `client_id`, `client_secret` and that `redirect_uri` is exactly
-  the registered one. A `code` or a refresh token is never accepted where an access token is.
+  the registered one. A `code` or a refresh token is never accepted where an access token is. The Allow click is what
+  stops a link someone else started from signing the user into that person's client: the user sees who is asking.
 - `clientId` is a name you choose (`<product>-mcp`) and `clientSecret` a long random value you make. Both go in the
   product's own environment; the secret reaches the command as `"${ENV_NAME}"` from `.env`, never a committed file.
 - The order: write both endpoints and test them locally (a code exchange against the local server); run the command
@@ -225,8 +226,9 @@ How it works:
   and `input`.
 - The MCP server's `run_code` tool posts to that webhook. The AI client's token reaches the flow as it reaches any
   tool's API ("Who signs in"), and the MCP tool adds a key that only it and the flow know.
-- The code gets `api` and `input`, not the request: `context` is not visible inside it, so it never reads the token
-  or the key, and `api()` sends the token only to the product's API.
+- The code gets `api` and `input`. The step empties the request's headers before the code runs (`context` is a
+  variable of the step, and code run with `new Function` can read it), so the code never reads the token or the
+  key, and `api()` sends the token only to the product's API.
 - One flow serves the product's own server and every user's server, because the code always acts with the caller's
   token.
 
@@ -234,8 +236,9 @@ How it works:
 
 1. **The flow**, as my-automations.md builds one: Create Empty Flow,
    Save Trigger with `triggerType: "webhook"`, then Save Steps with this one step, named `run_code`. Its address is
-   `https://flow.sokt.io/func/<script_id>`. Set the three values at the top:
-   - `SANDBOX_KEY`: a long random string (`openssl rand -hex 24`), also kept in the product's `.env` as
+   `https://flow.sokt.io/func/<script_id>`; keep that address in the product's `.env` as `TASKPAD_RUN_CODE_URL` (a
+   `script_id` is a credential and never goes in a committed file). Set the three values at the top:
+   - `SANDBOX_KEY`: a long random string (48 hex characters from any generator), also kept in the product's `.env` as
      `TASKPAD_SANDBOX_KEY`, which the tool of step 2 reads.
    - `API_BASE`: the product's API address, with no `/` at the end.
    - `ME_URL`: an endpoint that answers 200 for a valid token, such as the `validationUrl` of the server's login.
@@ -257,6 +260,7 @@ How it works:
    if (!signedIn?.ok) return { error: 'Not signed in: the token was missing or refused.' }
 
    const send = fetch // kept before the code runs, so the code cannot swap fetch to catch the token
+   context = { ...context, req: { ...context.req, headers: {} } } // the code can read context: the token and the key leave it first
    const api = async (method, path, body) => {
      // a path must start with /, so nothing in it can change the host: the token goes only to API_BASE
      if (!String(path).startsWith('/')) throw new Error('api() takes a path that starts with /')
@@ -295,7 +299,7 @@ How it works:
      "name": "run_code",
      "description": "Runs JavaScript against the TaskPad API as the signed-in user. Use it for jobs the other tools do not cover or that need several calls; read the taskpad_api skill first.",
      "api": {
-       "url": "https://flow.sokt.io/func/<script_id>",
+       "url": "${TASKPAD_RUN_CODE_URL}",
        "method": "POST",
        "tokenPrefix": "Bearer",
        "headers": { "X-Sandbox-Key": "${TASKPAD_SANDBOX_KEY}" }
