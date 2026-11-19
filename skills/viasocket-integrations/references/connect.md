@@ -59,7 +59,7 @@ The popup opens from the click itself, before any `await`: fetch the token on pa
 ## 3. Right after Connect
 
 Some apps need one choice per user before any action makes sense: their site, property, workspace or board. The
-app's page lists them in its **Pickers** table. Make that choice part of connecting and store it with the `auth_id`.
+pages of its events list them in a **Pickers** section (its last column names an event that lists a key with less needed first). Make that choice part of connecting and store it with the `auth_id`.
 The rule and the code: actions-and-events.md, "Once, or per run".
 
 ## Rules

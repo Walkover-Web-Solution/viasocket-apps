@@ -26,6 +26,12 @@ https://viasocket.com/docs/plugs/skills/index.md
 | one action or trigger of an existing plug created, fixed or improved | `SKILL-ACTION.md`        |
 | one connection (auth) of an existing plug created, edited or copied  | `SKILL-CONNECTION.md`    |
 
+**Mode** (`publish-policy.md` "Who is asking"): you came here because the product needs what viaSocket lacks — an
+app with nothing live (the person chose to build it) or an action, trigger or field on the person's own plug
+(feedback.md "When viaSocket lacks it") → tell the guide you are in
+**product mode**: the same steps up to the review, then it publishes privately without asking and calls
+`report_published`. The person asked for plug work itself → **person mode**, as the guide says.
+
 Only building or changing needs a guide. Listing or inspecting plugs, their actions, versions or analytics is a few
 reads from the table below, with no guide to fetch.
 
@@ -61,13 +67,13 @@ With the token instead, make the same calls yourself:
   | `report_feedback`                                                                                 | `POST https://flow.sokt.io/func/scriVmoUHhmc`, no auth header, the body feedback.md gives, with `orgId` as that page says; answers `requestId` |
   | `report_published`                                                                                | `POST https://flow.sokt.io/func/scriIJ3BvlIh` with the header and `{ pluginId, published, app?, actionIds?, note? }`, once after a publish on their own plug                    |
 
-- **Never** print, paste or store the token or any `clientsecret`; the person you work for enters client ids and
-  secrets in the Developer Hub themselves. Auth reads return secrets decrypted: don't echo them.
+- **Never** print, paste or store the token or any `clientsecret`; client ids and secrets go into the Developer Hub
+  only as the guide's connection step says. Auth reads return secrets decrypted: don't echo them.
 
 ## Finished when
 
-The guide's own checklist, plus: nothing published before the guide's review and dry run pass, then published privately without asking (public
-only on their yes);
+The guide's own checklist, plus: nothing published before the guide's review and dry run pass; then product mode
+published privately without asking, person mode as the person chose;
 `report_published` sent after a publish on their own plug; the report says what was built, what they still enter
 (credentials), what the dry run verified, and the Developer Hub link (`https://flow.viasocket.com/developer/<ORG_ID>`).
 

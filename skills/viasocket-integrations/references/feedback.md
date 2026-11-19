@@ -32,6 +32,24 @@ event, with `reported: false`.
    `?search=<words>`; its other actions and the built-in ones
    (https://viasocket.com/docs/skill/built-in-actions.md). A plug job builds the missing piece itself
    (plugs.md), except on a plug viaSocket owns.
+   **Nothing live for the app** while you build a product: the search finds it nowhere, or its page answers "Nothing
+   to integrate". That means either no plug exists, or a plug exists with no published actions or triggers yet; the
+   page can't tell which. Check the person's own org (`list_plugins`, or its call in
+   plugs.md, matching the app's name or domain): a plug of theirs for this app,
+   published or not, is theirs to finish.
+   Then ask the person once, as a form (choice buttons when the client has them, else one short message with two
+   numbered options):
+   - **Build it ourselves** — say whether this finishes their own plug or creates a new one in their organisation, then
+     list what this app's plug needs, from what you found about it, not a generic list: its API docs (the URL you
+     found, or that none was found), how it signs in (an OAuth app's client ID and secret, or an API key, and where in
+     the app to get it), an account to test with, and the actions and triggers the product needs. On this choice,
+     build it as plugs.md says, in product mode, and skip step 2 (no `report_feedback`
+     for it; the publish still sends `report_published`). If the build
+     can't finish (no usable API docs, no credentials), say why and offer the other choice.
+   - **Ask viaSocket to build it** — go on with step 2. viaSocket finishes its own plug for the app if it has one.
+
+   The app is live but lacks the action, trigger or field the product needs: no form. Their own plug, build it;
+   viaSocket's, step 2.
 2. **Report it once per missing item,** with what you searched, and tell them. The answer carries a `requestId`: the
    report's own id, which viaSocket uses to build what is missing. Keep it (step 3).
 3. **Build everything that does not need it.** Leave the part that does unwired, with a

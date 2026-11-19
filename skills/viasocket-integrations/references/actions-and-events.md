@@ -103,8 +103,8 @@ enabled again.
 - **Once, or per run.** A `PICK` value that is the same for every run of one user (their site, property, workspace,
   team, calendar, account, board) is chosen **once, right after Connect**, not again in every action's form: show the
   list on the connection's own screen, store the choice with the `auth_id`, show it there and let them change it,
-  and fill the key from it on every run. The app's page has a **Pickers** table for exactly this: for each such key,
-  the event and `fieldKey` that list it before any action is chosen (`Get_Site` lists `siteUrl` for Search Console).
+  and fill the key from it on every run. Each event's page has a **Pickers** section for exactly this: for each such
+  key, the event and `fieldKey` that list it before any action is chosen (`Get_Site` lists `siteUrl` for Search Console).
   A value that changes with the run (a message, a row, a date range, a recipient) is chosen in the action's own form
   or filled by the product. Say which in the plan table of app-integrations.md; the person you work for
   confirms it.
@@ -123,12 +123,12 @@ enabled again.
   never load every page of a long list to render the first.
 - A field can answer a `message` with its list, for the user to see (why it is empty, what to choose first). Show it.
 - Show `label`, send `value` verbatim. A `KEYS` key takes one entry per option `value`.
-- A once-after-Connect list (the app page's Pickers table) is read the same way, from the event the table names;
-  `existingFields` holds the keys its "needs first" column lists:
+- A once-after-Connect list (an event page's Pickers section, last column) is read the same way, from the event it
+  names; `existingFields` holds the keys its "needs first" column lists:
 
 ```js
 // right after Connect: the user's Search Console sites, once, stored with the auth_id
-const { options } = await listOptions(userId, slug, 'Get_Site', { fieldKey: 'siteUrl', authId }) // from the app page's Pickers table
+const { options } = await listOptions(userId, slug, 'Get_Site', { fieldKey: 'siteUrl', authId }) // from the event page's Pickers section
 
 // a long, searchable list, as the user types and scrolls
 const page = await listOptions(userId, slug, '<action_key>', {
