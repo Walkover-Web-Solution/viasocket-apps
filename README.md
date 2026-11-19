@@ -67,6 +67,18 @@ built by hand. No dependencies; exits 1 on a failure, so it can be a test. It re
 no line of code. (The same checker is served at `https://flow.viasocket.com/viasocket-check.mjs` for a machine
 without npm.)
 
+Have your own OAuth app with a provider (your own client ID and client secret for Slack, say)? Your users can
+sign in through it instead of viaSocket's: your name on the consent screen, nothing else changes, no code.
+
+```sh
+npx viasocket-apps oauth-app slack                                   # the redirect URL to register, and what is saved
+npx viasocket-apps oauth-app slack --id-env SLACK_CLIENT_ID --secret-env SLACK_CLIENT_SECRET
+```
+
+You pass the names of the two variables in your `.env`, never the values: the command reads them and sends
+them to viaSocket, which keeps the secret encrypted and never shows it again. `--remove` goes back to
+viaSocket's OAuth app. The same form is in your embed's Settings in the dashboard.
+
 ### Set up from the command line
 
 Everything a product needs in `.env`, with one command and one click in the browser:

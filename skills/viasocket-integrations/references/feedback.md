@@ -19,8 +19,9 @@ Only when one of these happens (never to report success):
   what to do first and after;
 - you can't tell which page, action or id applies (`kind: confusion`).
 
-Don't report problems that aren't viaSocket's: a bug in the product's own code, a wrong input you then fixed, or the end
-user's account (a revoked or expired connection, missing permissions in their app).
+Don't report problems that aren't viaSocket's: a bug in the product's own code, a wrong input you then fixed, the end
+user's account (a revoked or expired connection, missing permissions in their app), or a correction about their
+product's own rules or taste, with no page here behind it.
 
 Every report here is also a `problem` progress event with `reported: true`
 (journey.md); a problem that is not viaSocket's is still a `problem`
@@ -54,7 +55,8 @@ event, with `reported: false`.
    report's own id, which viaSocket uses to build what is missing. Keep it (step 3).
 3. **Build everything that does not need it.** Leave the part that does unwired, with a
    `VIASOCKET-PENDING(<requestId>): <what is missing>` comment where it would go, write the same line in
-   `viasocket-plan.md`, and name each one in the report. Never stand in for it with an invented id, a
+   `viasocket-plan.md`, and name each one in the report under `VIASOCKET-PENDING` (the skill's "The report"), not as
+   UNTESTED: nothing is wired there. Never stand in for it with an invented id, a
    page's sample or a direct call to the app's own API: those pass a review and fail on the first real user.
 4. **Come back to it.** When the project is opened again (or the person asks), check each pending `requestId` before
    anything else: the connector's `get_request_status` tool with `{ "requestId" }`, or without it
@@ -70,12 +72,15 @@ event, with `reported: false`.
 
 ## What to send
 
-Always send `source` (`sdk`, `http_api`, `plug`, `action`, `trigger`, `connection`, or `skill` for a page of this
-skill), `kind`, `feedback` (what went wrong, in plain words) and `skill_version` (the `Skill version` line at the end of
-the skill); add `stage`, `expected`, `actual`, the `error` (status, code, message) and `refs` with the ids
-you have: `app` (the app's name or slug), `pluginId` (its `service_id`), `actionId` (the action's key, or its `action_version_id`), `authId`
-(the `auth_id`) and `requestId`. Describe calls; never send a secret, token, signing secret, `script_id` or the
-product's own code or data. No need to ask first; list what you reported in your final report.
+Always send `source` (`sdk`, `http_api`, `plug`, `action`, `trigger`, `connection`, `skill` for a page of this
+skill, or `other`), `kind`, `feedback` (what went wrong, in plain words) and `skill_version` (the `Skill version` line
+at the end of the skill; plug work: the one at the end of the plug guides index,
+https://viasocket.com/docs/plugs/skills/index.md); add `stage` (the page you were on, named as `actions_and_events`),
+`expected`, `actual`, the `error` (status, code, message) and `refs` with the ids you have: `app` (the app's name or
+slug), `pluginId` (its `service_id`), `actionId` (the action's key, or its `action_version_id`), `authId` (the
+`auth_id`, when the problem is about one connection) and `requestId` (the open request the problem is about, from an
+earlier report). Describe calls; never send a secret, token, signing secret, `script_id` or the product's own code or
+data. No need to ask first; list what you reported in your final report.
 
 ## How to send it
 

@@ -4,7 +4,8 @@ Back to the skill: https://viasocket.com/docs/skill.md
 
 The product gets sign-up and login, a profile page, team management (invite, change role, remove) and organisations
 with roles and permissions, as ready screens, from the first day. 36Blocks, from the same team, keeps every user
-account itself, so the product needs no users table, no password storage and no auth schema. Free up to 1,000 users.
+account itself, so the product needs no users table, no password storage and no auth schema. Free up to 1,000 monthly
+active users and 3 blocks.
 
 Use it when the product has no login yet, or the person you work for asks for one, for teams or for organisations.
 Never move a product that already has its own login onto it: say that needs 36Blocks support.
@@ -35,22 +36,24 @@ Never move a product that already has its own login onto it: say that needs 36Bl
 **With the rest of viaSocket:** the viaSocket embed token's `unique_identifier` comes from this login, so
 connections, automations, AI threads and memory follow it. Decide whose they are: each person's (the c_user's
 `id` from `getDetails`) or the organisation's (the current c_company's `id`, so members share them). Keep it the
-same for the same person or organisation every time. Shared AI memory for an organisation is a space granted to
-its members, named from its c_company `id`.
+same for the same person or organisation every time. Shared AI memory for an organisation is a space the product
+names (`teams/<c_company id>`) and grants to each member in their embed token's `memory_spaces`
+(https://memory-api.viasocket.com/guide.md, "Sharing and agents").
 
 ## The screens
 
 Every screen is the same script with a different `type`:
 
-| `type`                 | screen                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------- |
-| `authorization`        | login; its container is `<div id="<reference_id>">` and it takes no `authToken` |
-| `user-profile`         | my account and my organisations                                                 |
-| `user-management`      | the members of the current organisation                                         |
-| `organization-details` | the organisation's settings                                                     |
+| `type` | screen |
+| --- | --- |
+| `authorization` | login; its container is `<div id="<reference_id>">` and it takes no `authToken` |
+| `user-profile` | my account and my organisations |
+| `user-management` | the members of the current organisation |
+| `organization-details` | the organisation's settings |
 
 Mount it client-side only (a React or Vue component that adds the script on mount and removes it on unmount; a
-client component in Next.js):
+client component in Next.js). The browser cannot read the HTTP-only cookie of step 3: the server that renders the page
+puts the token into this `configuration`, or a route behind the product's login answers it.
 
 ```html
 <div id="userProxyContainer"></div>
@@ -71,13 +74,13 @@ For `authorization`, the container is `<div id="<reference_id>"></div>` instead 
 
 Base `https://routes.msg91.com/api`, header `proxy_auth_token: <token>`, from the product's server.
 
-| call                    | body                                                     | answers                                                                                                                                        |
-| ----------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /c/getDetails`     |                                                          | `{ data: [{ id, name, email, c_companies: [{ id, name, role_name }], currentCompany: { id, role, permissions } }], status, hasError, errors }` |
-| `POST /c/switchCompany` | `{ "company_ref_id": <a c_company id from getDetails> }` | a `jwt` for that organisation's session                                                                                                        |
-| `DELETE /c/logout`      |                                                          | the token stops working                                                                                                                        |
+| call | body | answers |
+| --- | --- | --- |
+| `GET /c/getDetails` |  | `{ data: [{ id, name, email, c_companies: [{ id, name, role_name }], currentCompany: { id, role, permissions } }], status, hasError, errors }` |
+| `POST /c/switchCompany` | `{ "company_ref_id": <a c_company id from getDetails> }` | a `jwt` for that organisation's session |
+| `DELETE /c/logout` |  | the token stops working |
 
-## Proof
+## Finished when
 
 Sign in through the login page once with a test account: the callback stores the cookie, `getDetails` returns
 that user, and logout ends the session (a second `getDetails` with the same token fails).

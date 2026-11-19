@@ -1,19 +1,19 @@
-# MCP servers
+# The product's own MCP server
 
 Part of the viaSocket skill: https://viasocket.com/docs/skill.md.
 
+Contents: 1. Decide, then get a yes; 2. Build it; 3. A code tool for the rest of the API; Finished when; When it goes wrong
+
 The person you work for wants their product usable from Claude, ChatGPT, Cursor or any other agent: a user asks
 their AI to do something, and it happens inside the product. That takes an MCP server, one web address an AI client
-adds to get a set of tools. viaSocket hosts it, with the product's name, its sign-in, its instructions and its
-ready-made prompts; the product hosts only the API it already has, and work that starts in any agent finishes
-inside the product.
+adds to get a set of tools. viaSocket hosts it; the product hosts only the API it already has.
 
 Two kinds, and a product can have both:
 
-| kind                     | what it is                                                                                                            | who makes it                                       | read                             |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------------------- |
-| the product's own server | the product's API as tools: one URL for every user, each signed in with the product's login                           | you, once, with a command, in the person's account | sections 1 and 2 below           |
-| users' MCP servers       | servers a user makes for an agent or AI product they build inside the product, with the tools they pick; theirs alone | the product's code, for each user                  | "Users' MCP servers", at the end |
+| kind | what it is | who makes it | read |
+| --- | --- | --- | --- |
+| the product's own server | the product's API as tools: one URL for every user, each signed in with the product's login | you, once, with a command, in the person's account | this page |
+| users' MCP servers | servers a user makes for an agent or AI product they build inside the product, with the tools they pick; theirs alone | the product's code, for each user | mcp-users.md |
 
 Which one:
 
@@ -43,18 +43,25 @@ mints `VIASOCKET_MCP_TOKEN` from it and keeps it in `.env`, and never prints a s
 server instead: mint the token with its `call_any_read_api_of_viasocket` tool (`GET
 https://flow-api.viasocket.com/mcp/agent-token`, `Authorization` empty), write `data.token` to `.env` as
 `VIASOCKET_MCP_TOKEN` without echoing it, and run the command: it uses that token while it works (24 hours). The
-connector cannot call `mcp.viasocket.com` itself.
+connector cannot call `mcp.viasocket.com` itself. With no terminal at all (a chat): write `viasocket.mcp.json` into
+the product's repo, give them the one command to run in it as the one thing to do (`npx -y viasocket-apps mcp
+--no-open`, then the link it prints), and read `viasocket.mcp.ids.json` and what it printed when they say it ran.
 
 ## 1. Decide, then get a yes
 
-The plan, as the skill's "The person you work for" says: what the product's users will be able to do from Claude or
+The plan, as the skill's "Plan, then a yes" says: what the product's users will be able to do from Claude or
 ChatGPT. Below its three lines, these decisions, for whoever reads on. The command runs only after the yes.
 
 ### The tools
 
 - One per endpoint the product's users should reach from an AI client. Start with the few that matter.
 - Each has a name (`snake_case`, at most 45 characters), one sentence on when the AI should use it, and its inputs as
-  a JSON Schema with a description per field. `readOnlyHint: true` for reads, `destructiveHint: true` for deletes.
+  a JSON Schema with a description per field.
+- `annotations` are MCP's hints to the client, which may ask the user before a call it takes for a change:
+  `readOnlyHint: true` for a read; `destructiveHint: false` for a write that only adds or marks, so nothing is lost;
+  `idempotentHint: true` when the same call again changes nothing more; `openWorldHint: false` when the tool reaches
+  only the product's API. A hint left out takes the MCP default (not read-only, destructive, not idempotent, open
+  world), so an unannotated write is treated like a delete; viaSocket passes on only the hints a tool sets.
 - **A tool call has 30 seconds.** Work that can take longer (a job, a build, a question to another agent) is two
   tools: one that starts it and answers an id at once, one that reads the result by that id. The product pushes the
   result to whoever waits for it; the AI polls or is told.
@@ -70,24 +77,19 @@ ChatGPT. Below its three lines, these decisions, for whoever reads on. The comma
   This is the mode for machine-to-machine use: another product's agent, a CI job, a Cursor cloud agent.
 - **Nobody**: only for tools that read public data.
 
-Claude.ai and ChatGPT can only use the product's login: they have no header setting for a key. When the product has
-no OAuth, "The product has no OAuth yet" below says what to add.
+Claude.ai and ChatGPT use the product's login or no login, never a key: they have no header setting. When the product
+has no OAuth, "The product has no OAuth yet" below says what to add.
 
 How the token travels, in every mode:
 
-| hop                                                                               | what is sent                                                                                                                                                                                                                                                                                                                                                              |
-| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| the AI client → viaSocket                                                         | `Authorization: Bearer <token>` on every request; viaSocket takes the token as what follows `Bearer `. Claude and ChatGPT send the token their sign-in got; Cursor, Claude Code, Windsurf and any client with a `headers` setting send what the user put there, so that entry is `"Authorization": "Bearer <token>"`: another header name, or the bare token, is refused. |
-| viaSocket → the product's `validationUrl`, on every request while the login is on | the token under `headerName`: as `Bearer <token>` when `headerName` is `Authorization`, bare under any other name. A 200 means valid; anything else becomes a 401 to the client, so a token that expires stops working at once. With a key, that 401 carries no sign-in, and the client shows the server as failed until the user fixes the header.                       |
-| viaSocket → each tool's API, in every mode, whenever the client sent a token      | the bare token under the tool's own `tokenHeader` (default `Authorization`), with the tool's `tokenPrefix` and a space in front when set: set `"tokenPrefix": "Bearer"` on each tool whose API reads `Authorization: Bearer <token>`. A tool whose `headers` already sets that header keeps its own value and never gets the user's token.                                |
+| hop | what is sent |
+| --- | --- |
+| the AI client → viaSocket | `Authorization: Bearer <token>` on every request; viaSocket takes the token as what follows `Bearer `. Claude and ChatGPT send the token their sign-in got; Cursor, Claude Code, Windsurf, VS Code and any client with a `headers` setting send what the user put there (they can run the product's OAuth too), so that entry is `"Authorization": "Bearer <token>"`: another header name, or the bare token, is refused. |
+| viaSocket → the product's `validationUrl`, on every request while the login is on | the token under `headerName`: as `Bearer <token>` when `headerName` is `Authorization`, bare under any other name. A 200 means valid; anything else becomes a 401 to the client, so a token that expires stops working at once. With a key, that 401 carries no sign-in, and the client shows the server as failed until the user fixes the header. |
+| viaSocket → each tool's API, in every mode, whenever the client sent a token | the bare token under the tool's own `tokenHeader` (default `Authorization`), with the tool's `tokenPrefix` and a space in front when set: set `"tokenPrefix": "Bearer"` on each tool whose API reads `Authorization: Bearer <token>`. A tool whose `headers` already sets that header keeps its own value and never gets the user's token; with a login on, the command refuses such a tool. |
 
 So the product's API receives, for a tool with `"tokenPrefix": "Bearer"`, exactly what it receives from its own
 frontend: `Authorization: Bearer <the user's token>`, plus the tool's arguments in the body or the query string.
-
-Which clients send what: Cursor, Claude Code, Windsurf and VS Code send the `headers` of their config on every request
-and can also run the product's OAuth; Claude.ai and ChatGPT connectors have no header setting, so they need the
-product's OAuth or no login. Whether a client sends a header is confirmed by the command's test with `--token`, not
-assumed.
 
 ### The product has no OAuth yet
 
@@ -95,10 +97,10 @@ Claude.ai and ChatGPT reach a login server only through the product's OAuth, and
 but no OAuth. Then the product gets two small endpoints of its own, on top of the login it already has; viaSocket
 calls them and nothing else changes for its users:
 
-| endpoint                                            | receives                                                                                                                                        | answers                                                                                                                                                                                                           |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loginUrl`, a page (`GET`)                          | `client_id`, `redirect_uri`, `response_type=code`, `state`, maybe `scope`                                                                       | after the user signs in with the product's own login and clicks **Allow** on a line that names what is asking (the client's name): a redirect to `redirect_uri` with `code` and the same `state`, or with `error` |
-| `tokenUrl` (`POST`, a JSON body, within 10 seconds) | `client_id`, `client_secret`, `grant_type: "authorization_code"`, `code`, `redirect_uri`; or `grant_type: "refresh_token"` with `refresh_token` | `{ "access_token", "expires_in", "refresh_token" }`; only `access_token` is required                                                                                                                              |
+| endpoint | receives | answers |
+| --- | --- | --- |
+| `loginUrl`, a page (`GET`) | `client_id`, `redirect_uri`, `response_type=code`, `state`, maybe `scope` | after the user signs in with the product's own login and clicks **Allow** on a line that names what is asking (the client's name): a redirect to `redirect_uri` with `code` and the same `state`, or with `error` |
+| `tokenUrl` (`POST`, a JSON body, within 10 seconds) | `client_id`, `client_secret`, `grant_type: "authorization_code"`, `code`, `redirect_uri`; or `grant_type: "refresh_token"` with `refresh_token` | `{ "access_token", "expires_in", "refresh_token" }`; only `access_token` is required |
 
 - The `access_token` is the product's own token, the one its API already takes. viaSocket forwards it to the tools as
   it is, and `validationUrl` must answer 200 for it, so `validationUrl` stays in the definition in this mode too.
@@ -153,7 +155,8 @@ calls them and nothing else changes for its users:
          "name": "complete_task",
          "description": "Marks one task as done. Only when the user says they finished it.",
          "api": { "url": "https://api.taskpad.example/todos/{{task_id}}", "method": "PATCH", "tokenPrefix": "Bearer" },
-         "inputSchema": { "type": "object", "properties": { "task_id": { "type": "number" } }, "required": ["task_id"] }
+         "inputSchema": { "type": "object", "properties": { "task_id": { "type": "number" } }, "required": ["task_id"] },
+         "annotations": { "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
        }
      ],
      "skills": [
@@ -180,7 +183,7 @@ calls them and nothing else changes for its users:
      `tokenHeader` names another header for the user's token. `outputSchema` when the answer has a fixed shape.
    - A skill's `content` can be inline markdown or a `file` next to the definition.
 
-2. **Run the command.** First `npx -y viasocket-apps mcp --dry-run`: it checks the file, says what is wrong by key,
+2. **Run the command.** First `npx -y viasocket-apps mcp --dry-run --no-open`: it checks the file, says what is wrong by key,
    and sends nothing. Then the command itself creates the server, its tools, skills and prompts, or updates them in
    place on a rerun,
    and removes what the file no longer lists. The ids of everything it made go to `viasocket.mcp.ids.json`: commit
@@ -188,11 +191,12 @@ calls them and nothing else changes for its users:
    `prompts/list` on the URL as a client would and prints what it found; on a login server it reports the 401 that
    is right without a token.
 
-3. **Test one tool as a client:** `npx -y viasocket-apps mcp --call list_tasks --args '{"completed":false}'`, with
+3. **Test one tool as a client:** `npx -y viasocket-apps mcp --no-open --call list_tasks --args '{"completed":false}'`, with
    `--token <a token the validationUrl accepts>` on a login server (a key, or a token the product issued for a test
    user: with a password login, sign in as a test user through the product's own login endpoint, such as
-   `POST /auth/login`, and pass the token it answers). The answer is what the product's API returned; a tool that fails answers with a text that starts with
-   `Error:`. For the product's OAuth, ask them to add the URL to Claude or Cursor once, sign in, and call each tool.
+   `POST /auth/login`, and pass the token it answers). The answer is what the product's API returned; a tool that fails answers a text that starts with
+   `Error:`, and the command prints `tools/call <name> FAILED` and exits 1. With `--token`, the token goes only to
+   the server's URL on `mcp.viasocket.com`. For the product's OAuth, ask them to add the URL to Claude or Cursor once, sign in, and call each tool.
    A tool that was never called is UNTESTED.
 
 4. **A custom domain**, when wanted: `PUT https://mcp.viasocket.com/api/mcp/<server id>/domain` with `{ "domain" }`
@@ -200,14 +204,14 @@ calls them and nothing else changes for its users:
    `pending_dns` → `issuing_cert` → `active` on its own (an hour at most). Everything else the management API can do
    is in `https://mcp.viasocket.com/api-reference.md`; the command covers what a product needs.
 
-5. **Give it to the product's own AI, if the product has one:** the AI feature's send call takes `mcpServers`
-   (`mcp_servers` over HTTP): `[{ "name": "<product>", "url": "<the MCP URL>", "headers": { "Authorization": "Bearer <the signed-in user's token>" } }]`,
-   next to its `tools`. The assistant then calls the same tools, as that user, with no second tool list to maintain.
+5. **Give it to the product's own AI, if the product has one:** the AI feature's send call takes
+   `mcp_servers`: `[{ "name": "<product>", "url": "<the MCP URL>", "headers": { "Authorization": "Bearer <the signed-in user's token>" } }]`,
+   next to its `extra_tools`. The assistant then calls the same tools, as that user, with no second tool list to maintain.
    Any other MCP server goes in the same list.
 
 6. **Hand it over:** the URL, a short paragraph the product can put on its own help page for its users, and how a
-   user adds it (Claude: https://claude.ai/settings/connectors, add a custom connector with the URL; ChatGPT: a custom
-   connector with the URL in its settings;
+   user adds it (with the product's login or none, Claude: https://claude.ai/settings/connectors, add a custom
+   connector with the URL; ChatGPT: a custom connector with the URL in its settings;
    Cursor and Claude Code: `{ "mcpServers": { "<product>": { "url": "<the URL>" } } }`, plus
    `"headers": { "Authorization": "Bearer <key>" }` with a key). For another product's agent: the product mints a
    token for that job, hands it with the URL, and expires it when the job ends.
@@ -237,7 +241,7 @@ How it works:
 1. **The flow**, as my-automations.md builds one: Create Empty Flow,
    Save Trigger with `triggerType: "webhook"`, then Save Steps with this one step, named `run_code`. Its address is
    `https://flow.sokt.io/func/<script_id>`; keep that address in the product's `.env` as `TASKPAD_RUN_CODE_URL` (a
-   `script_id` is a credential and never goes in a committed file). Set the three values at the top:
+   `script_id` is a credential and never goes in a committed file). Set the four values at the top:
    - `SANDBOX_KEY`: a long random string (48 hex characters from any generator), also kept in the product's `.env` as
      `TASKPAD_SANDBOX_KEY`, which the tool of step 2 reads.
    - `API_BASE`: the product's API address, with no `/` at the end.
@@ -262,8 +266,9 @@ How it works:
    const send = fetch // kept before the code runs, so the code cannot swap fetch to catch the token
    context = { ...context, req: { ...context.req, headers: {} } } // the code can read context: the token and the key leave it first
    const api = async (method, path, body) => {
-     // a path must start with /, so nothing in it can change the host: the token goes only to API_BASE
-     if (!String(path).startsWith('/')) throw new Error('api() takes a path that starts with /')
+     // the token goes only to API_BASE: the path is a string that starts with /, so nothing in it can change the host
+     if (typeof path !== 'string' || !path.startsWith('/')) throw new Error('api() takes a path that starts with /')
+     if (new URL(API_BASE + path).origin !== new URL(API_BASE).origin) throw new Error('api() reaches only ' + API_BASE)
      const response = await send(API_BASE + path, {
        method,
        headers: { [TOKEN_HEADER]: token, 'content-type': 'application/json' },
@@ -341,17 +346,17 @@ How it works:
    return { closed: late.map((task) => task.title) }
    ```
 
-4. **Test:** `npx -y viasocket-apps mcp --call run_code --args '{"code":"return (await api(\"GET\", \"/me\")).status"}'`
+4. **Test:** `npx -y viasocket-apps mcp --no-open --call run_code --args '{"code":"return (await api(\"GET\", \"/me\")).status"}'`
    with `--token <a test user's token>` answers `{"result":200}`. Then post to the webhook without the key and see
    the refusal.
 
 What the tool answers:
 
-| answer                                                 | meaning                                                          |
-| ------------------------------------------------------ | ---------------------------------------------------------------- |
-| `{ "result": … }`                                      | what the code returned                                           |
-| `{ "error": "<message>" }`                             | the code threw or did not compile; the message says why          |
-| `{ "error": "Not signed in: …" }`                      | the client sent no token, or `ME_URL` refused it                 |
+| answer | meaning |
+| --- | --- |
+| `{ "result": … }` | what the code returned |
+| `{ "error": "<message>" }` | the code threw or did not compile; the message says why |
+| `{ "error": "Not signed in: …" }` | the client sent no token, or `ME_URL` refused it |
 | `{ "error": "This flow runs only for its MCP tool." }` | the key is missing or wrong: the call did not come from the tool |
 
 Limits:
@@ -366,177 +371,27 @@ Limits:
 - **The flow's history** keeps each run's input and result, which the members of the person's viaSocket account can
   open.
 
-## Finished when: the product's own server
+## Finished when
 
 The report says: the URL and the slug; each tool's name, endpoint and who may call it; which login mode and, for
 OAuth, that the redirect URI is registered; the instructions, each skill and each prompt; the test of step 3 for
 each tool, or UNTESTED with why; that `viasocket.mcp.json` and `viasocket.mcp.ids.json` are committed. With a code
-tool: the flow's `script_id`, where the key is kept, its skill, and its test.
+tool: where the flow's address and the key are kept (never the `script_id` itself), its skill, and its test.
 
-## When it goes wrong: the product's own server
+## When it goes wrong
 
-| symptom                                                 | cause                                                                                                                                                              |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The command says `viasocket.mcp.json: …`                | The definition is wrong at that key; nothing was created. Fix the key and rerun.                                                                                   |
-| The command says `viasocket.mcp.json holds the ids …`   | The ids file of this page's earlier layout; the command moved it to `viasocket.mcp.ids.json`. Write the definition with the same slug and tool names, and rerun.   |
-| `401 Unauthorized` from `/api/...`                      | `VIASOCKET_MCP_TOKEN` expired (24 hours); the command mints a new one itself, a hand-made call gets one from `GET https://flow-api.viasocket.com/mcp/agent-token`. |
-| `409` on the slug                                       | Another server has it; pick another slug.                                                                                                                          |
-| Two tools with the same name on the URL                 | The ids file was deleted or not committed, so a rerun created anew; delete the extras with `DELETE /api/tool/id/<_id>` and keep the file.                          |
-| Sign-in fails after the product's login                 | The redirect URI is not registered in the OAuth app, or `tokenUrl` does not accept JSON.                                                                           |
-| Every tool call answers `Error: Tool API responded 401` | The token went bare: set `"tokenPrefix": "Bearer"` on the tool, or `tokenHeader` for another header.                                                               |
-| Cursor never asks to sign in                            | `"when": "needed"` is set: Cursor signs in only when connecting itself answers 401. Drop it.                                                                       |
-| A tool answers `Error:` after 30 seconds                | The product's endpoint took longer than a tool call may; split it into start and read, as "The tools" says.                                                        |
-| The custom domain stays `pending_dns`                   | The records are not there yet; `POST /api/mcp/<id>/domain/check` runs the check now and `lastError` says what is missing.                                          |
-
-## Users' MCP servers
-
-A product that lets its users build agents or AI products gives each user MCP servers of their own: made inside the
-product, with the tools the user picks, and taken to Claude, ChatGPT, Cursor or another agent. The product runs no
-MCP server, and no user sees another's.
-
-How it works:
-
-- A user's server has the parts of the product's own: tools that call the product's API, a login, instructions,
-  skills and prompts. Section 1 says how to choose each. The product's code makes it, for that user, when the user
-  saves their agent; no file and no command.
-- It is made with a token for that user, from `GET https://flow-api.viasocket.com/embed/mcp/token` with their embed
-  token (the one the product signs with `VIASOCKET_EMBED_SECRET`: connect.md
-  shows it).
-- That token is for an account of the user's own, so their servers, skills and prompts are apart from the product's
-  own server and from every other user's.
-- A user can have several servers, one per agent for example; each server's ids are kept with that agent.
-- A user's server can have section 3's code tool: the same flow and tool, with the key's value in place of `"${…}"`
-  (over HTTP, in `apiConfig.headers`). Name its skill per agent (`<agent>_api`), since skill names are unique per user.
-- What a user's server does not have: a slug or a custom domain (its URL is given back when it is made), and an OAuth
-  login (each server would need its own redirect URI registered in the product's OAuth app). The login is `api-key` or
-  `none`.
-
-### Decide, then get a yes
-
-Post these as the plan:
-
-- **The tools a user can pick:** which of the product's endpoints become tools, and each tool's description.
-- **Who signs in to a user's server:** `api-key`, a key the product issues per user or per agent and checks at its
-  `validationUrl` (the product builds both), or `none` for public data. How the token travels: "Who signs in" above.
-- **Where the ids are kept** (per server, with the agent, in the product's database) and where the user sees the URL
-  and removes a server.
-
-### Build it
-
-Every call answers JSON: `{ "success": true, "message": "…", "data": … }`, or `{ "success": false, "message": "<why>" }`
-with a status of 400 or more. Keep each id a call gives back in the product's database.
-
-1. **The user's token**, from the product's backend, with the user's embed token as it is (no `Bearer`):
-
-   ```bash
-   curl -s https://flow-api.viasocket.com/embed/mcp/token -H "Authorization: <the user's embed token>"
-   ```
-
-   ```json
-   {
-     "success": true,
-     "message": "MCP user token minted",
-     "data": { "token": "<token>", "token_type": "Bearer", "expires_in": 3600, "api": "https://mcp.viasocket.com/api" }
-   }
-   ```
-
-   Keep `data.token` in the product's backend for `expires_in` seconds, and get a new one on a 401. Every call below
-   goes to `https://mcp.viasocket.com/api` with `Authorization: Bearer <data.token>` and
-   `Content-Type: application/json`.
-
-2. **The server**, the first time only: `POST /mcp`. It answers `data._id`, the server id, and `data.url`, the MCP URL
-   the user adds to their client; show that URL, never build it.
-
-   ```json
-   {
-     "name": "Weekly planner",
-     "isAuthenticationEnabled": true,
-     "externalAuth": { "validationUrl": "https://api.taskpad.example/me", "headerName": "Authorization", "method": "GET" }
-   }
-   ```
-
-   With `none`: `"isAuthenticationEnabled": false` and no `externalAuth`.
-
-3. **Its words, look and login:** `PUT /mcp/<server id>`, right after step 2 and again whenever the user changes them,
-   with the same `name`, `isAuthenticationEnabled` and `externalAuth` (`null` with `none`), plus `branding`:
-
-   ```json
-   {
-     "name": "Weekly planner",
-     "title": "Weekly planner",
-     "instructions": "Start with list_tasks; change a task only when the user asks.",
-     "websiteUrl": "https://taskpad.example",
-     "iconUrl": "https://taskpad.example/icon.png"
-   }
-   ```
-
-   `branding.name` is the server's machine name in the MCP handshake: the name in lowercase with dashes
-   (`weekly-planner`). `title`, `websiteUrl` and `iconUrl` are what clients show; `instructions` is what every client
-   reads when it connects.
-
-4. **Each tool:** `POST /tool`. It answers `data._id`, the tool id. Section 2's `list_tasks` tool as a call:
-
-   ```json
-   {
-     "type": "custom",
-     "mcpServerId": "<server id>",
-     "title": "list_tasks",
-     "desc": "Lists one user's tasks. Use it before suggesting or changing anything.",
-     "apiConfig": { "url": "https://api.taskpad.example/todos", "method": "GET", "tokenPrefix": "Bearer" },
-     "payload": {
-       "inputSchema": {
-         "type": "object",
-         "properties": { "completed": { "type": "boolean", "description": "true for done tasks only; leave out for all" } }
-       }
-     },
-     "annotations": { "readOnlyHint": true }
-   }
-   ```
-
-   - `title` is the tool's name (`snake_case`, at most 45 characters) and `desc` when the AI should use it.
-   - `apiConfig` takes `url`, `method` (in capitals), `headers`, `tokenHeader`, `tokenPrefix` and `queryParams`, as
-     section 2 describes them.
-   - `payload` takes `inputSchema` and, when the answer has a fixed shape, `outputSchema`.
-   - To change a tool, send the same body with `"toolId": "<tool id>"`. To remove one, `DELETE /tool/id/<tool id>`.
-
-5. **Each skill:** `POST /skill` with `{ "name", "description", "content" }` answers `data._id`; then
-   `POST /mcp/<server id>/skill/<skill id>` puts it on the server.
-   - To change it: `PUT /skill/<skill id>` with the same body.
-   - To remove it: `DELETE /mcp/<server id>/skill/<skill id>`, then `DELETE /skill/<skill id>`.
-6. **Each prompt:** `POST /prompt` with `{ "name", "title", "description", "arguments", "content" }` answers
-   `data._id`; then `POST /mcp/<server id>/prompt/<prompt id>`. Change and remove it as a skill, with `prompt` in
-   place of `skill`.
-7. **The user's servers:** `GET /mcp` answers `data` as a list, each with `_id`, `name` and `url`.
-8. **Removing a server:** `DELETE /mcp/<server id>` removes it with its tools. Its skills and prompts belong to the
-   user's account, not the server, so also `DELETE /skill/<skill id>` and `DELETE /prompt/<prompt id>` for each.
-
-When the user saves their agent again: steps 3 to 6 for what changed, and remove what they dropped. Steps 4 to 6 take
-the ids kept from the first save, so nothing is made twice.
-
-Test one user's server as a client, with a key its `validationUrl` accepts:
-
-```bash
-curl -s -X POST "<the server's URL>" -H "content-type: application/json" -H "accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer <a key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
-```
-
-then the same with `"method":"tools/call","params":{"name":"<tool>","arguments":{...}}` once per tool. The answer is a
-line `event: message`, then `data:` and the JSON-RPC reply. A tool's answer is in `result.content[0].text`. A tool that
-failed answers a text that starts with `Error:`.
-
-### When it goes wrong
-
-| symptom                                          | cause                                                                                                        |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `401` or `498` from `/embed/mcp/token`           | The embed token is wrong (401) or missing (498): run the check of setup.md. |
-| `401` from `mcp.viasocket.com/api`               | The user's token expired (one hour): get a new one.                                                          |
-| `404` on a server, tool, skill or prompt id      | The id was deleted, or is another user's: each user's token reaches only that user's account.                |
-| A skill or prompt is refused as a duplicate name | Skill and prompt names are unique per user, across their servers: name them per agent (`<agent>_review`).    |
-| Two servers for one agent                        | The server id from the first save was not kept, so the next save made another.                               |
-
-### Finished when
-
-The report says: the tools a user can pick, the login mode and how keys are issued, where the ids are kept, where the
-user sees the URL and removes a server, and one user's server tested as a client, or UNTESTED with why.
+| symptom | cause |
+| --- | --- |
+| The command says `viasocket.mcp.json: …` | The definition is wrong at that key; nothing was created. Fix the key and rerun. |
+| The command says `viasocket.mcp.json holds the ids …` | The ids file of this page's earlier layout; the command moved it to `viasocket.mcp.ids.json`. Write the definition with the same slug and tool names, and rerun. |
+| The command says `viasocket.mcp.json names server …: kept in viasocket.mcp.ids.json` | The definition still has `server` from this page's earlier layout: the command keeps that id in the ids file and continues. Drop the key when convenient. |
+| `401 Unauthorized` from `/api/...` | `VIASOCKET_MCP_TOKEN` expired (24 hours); the command mints a new one itself, a hand-made call gets one from `GET https://flow-api.viasocket.com/mcp/agent-token`. |
+| `409` on the slug | Another server has it; pick another slug. |
+| Two tools with the same name on the URL | The ids file was deleted or not committed, so a rerun created anew; delete the extras with `DELETE /api/tool/id/<_id>` and keep the file. |
+| Sign-in fails after the product's login | The redirect URI is not registered in the OAuth app, or `tokenUrl` does not accept JSON. |
+| Every tool call answers `Error: Tool API responded 401` | The token went bare: set `"tokenPrefix": "Bearer"` on the tool, or `tokenHeader` for another header. |
+| Cursor never asks to sign in | `"when": "needed"` is set: Cursor signs in only when connecting itself answers 401. Drop it. |
+| A tool answers `Error:` after 30 seconds | The product's endpoint took longer than a tool call may; split it into start and read, as "The tools" says. |
+| The custom domain stays `pending_dns` | The records are not there yet; `POST /api/mcp/<id>/domain/check` runs the check now and `lastError` says what is missing. |
 
 END OF PAGE

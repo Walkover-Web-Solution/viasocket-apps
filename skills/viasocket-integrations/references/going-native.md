@@ -17,13 +17,13 @@ is lost; the product takes over the screens, one feature at a time.
 
 ## Replace
 
-| the prebuilt UI did                                                     | the product does now                                                                                                                            | page                                                                                              |
-| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| showed apps and actions                                                 | its own list from the catalog, forms from the action's typed input and `listOptions`                                                            | https://viasocket.com/docs/catalog-api.md, actions-and-events.md |
-| Connect button                                                          | the Connect popup from its own button                                                                                                           | connect.md                                                       |
-| saved a form the user filled and ran it, once per call or once per item | **door B**: a webhook automation (`runOncePerItem` for the per-item case) with one step that calls the action; the user can reopen it as a flow | https://viasocket.com/docs/automations.md                                                         |
-| let the product's AI act in the user's apps                             | **door A**: enable once, then one `runAction` per call, the action chosen at run time                                                           | app-integrations.md                                              |
-| told the product through `postMessage` events                           | the product writes its own record when it saves, and reads `listFlows` for status                                                               | manage.md                                                        |
+| the prebuilt UI did | the product does now | page |
+| --- | --- | --- |
+| showed apps and actions | its own list from the catalog, forms from the action's typed input and `listOptions` | https://viasocket.com/docs/catalog-api.md, actions-and-events.md |
+| Connect button | the Connect popup from its own button | connect.md |
+| saved a form the user filled and ran it, once per call or once per item | **door B**: a webhook automation (`runOncePerItem` for the per-item case) with one step that calls the action; the user can reopen it as a flow | https://viasocket.com/docs/automations.md |
+| let the product's AI act in the user's apps | **door A**: enable once, then one `runAction` per call, the action chosen at run time | app-integrations.md |
+| told the product through `postMessage` events | the product writes its own record when it saves, and reads `listFlows` for status | manage.md |
 
 Door A when the product's AI picks the action at run time. Door B for everything known before it runs: the
 product's code or the user chose it, it should run once per item, the user should see and reopen it as a flow, or the

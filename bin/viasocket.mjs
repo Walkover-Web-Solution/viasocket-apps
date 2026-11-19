@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* global process, console, fetch, AbortSignal, URL, URLSearchParams, setTimeout */
+/* global process, console, fetch, AbortSignal, URL, URLSearchParams, setTimeout, clearTimeout */
 /**
  * viasocket-login.mjs — signs in to viaSocket from the command line and sets up .env.
  *
@@ -7,6 +7,7 @@
  *   npx -y viasocket-apps setup [--env .env] [--project <id> | --new] [--name <title>] [--no-open] [--timeout 300]
  *   npx -y viasocket-apps mcp [--file viasocket.mcp.json] [--ids viasocket.mcp.ids.json] [--call <tool> --args <json> --token <t>]
  *   npx -y viasocket-apps connect <app> [--user <id>] [--env .env] [--no-open] [--timeout 300]
+ *   npx -y viasocket-apps oauth-app <app> [--id-env <NAME> --secret-env <NAME>] [--remove] [--env .env]
  *   npx -y viasocket-apps check [folder or file ...]
  *
  * This file is `bin/viasocket.mjs` of the viasocket-apps package, which is how the skill runs it: the published
@@ -35,6 +36,12 @@
  * 127.0.0.1 that opens viaSocket's consent popup through the connect script, then enables the app, so
  * the agent tools run on it at once. It needs what `setup` writes.
  *
+ * `oauth-app <app>` is for a product that has its own OAuth app with a provider: it saves that app's client ID and
+ * client secret for the product's embed project, so the product's users sign in to <app> through it instead of
+ * viaSocket's. The two values are read from the env file by the names given and sent straight to viaSocket; they are
+ * never printed and never passed on the command line. Without the names it prints the redirect URL to register with
+ * the provider and what is saved. It needs what `setup` writes.
+ *
  * `check [folder or file ...]` runs viasocket-check.mjs, which sits beside this file: every viaSocket slug, key,
  * id and URL the code hard-codes, checked against the live catalog, and the embed secret never a literal in source.
  *
@@ -43,8 +50,8 @@
  */
 import { createServer } from 'node:http'
 import { createHash, createHmac, randomBytes } from 'node:crypto'
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
-import { basename, dirname, resolve } from 'node:path'
+import { existsSync, lstatSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 
 const TOKEN_ENV = 'VIASOCKET_AGENT_TOKEN'
@@ -60,6 +67,10 @@ const API = (process.env.VIASOCKET_API_URL || 'https://flow-api.viasocket.com').
 const DASHBOARD = 'https://flow.viasocket.com/agent-access'
 /** The page that shows a product's three keys with one Copy button, for a sign-in that never arrived. */
 const EMBED_KEYS = 'https://flow.viasocket.com/embed-keys'
+/** The page where a product's own client ID and secret for one app are saved by hand. */
+const EMBED_OAUTH_APP = 'https://flow.viasocket.com/embed-oauth-app'
+/** The public catalog: one app by its slug or service id, no sign-in. */
+const CATALOG_APP = 'https://plug-service.viasocket.com/api/v1/plugins'
 const MCP_TOKEN_ENV = 'VIASOCKET_MCP_TOKEN'
 /** The MCP server's management API; the servers it hosts are at the same host. */
 const MCP_API = (process.env.VIASOCKET_MCP_API_URL || 'https://mcp.viasocket.com/api').replace(/\/+$/, '')
@@ -68,7 +79,7 @@ const MCP_HOST = MCP_API.replace(/\/api$/, '')
 function usage(code) {
   console.log(
     [
-      'usage: viasocket-apps <login | setup | mcp | connect <app> | check [folder ...]> [options]',
+      'usage: viasocket-apps <login | setup | mcp | connect <app> | oauth-app <app> | check [folder ...]> [options]',
       '',
       '  login             sign in; writes VIASOCKET_AGENT_TOKEN and VIASOCKET_ORG_ID',
       '  setup             login if needed, then the embed project and signing secret a product needs:',
@@ -76,9 +87,15 @@ function usage(code) {
       "  mcp               create or update the product's MCP server from viasocket.mcp.json, then test it",
       '  connect <app>     connect one app (slack, gmail, google-sheets) for one end user and enable it, from a',
       '                    page this command opens; needs what setup writes. Try the agent tools without a frontend',
+      "  oauth-app <app>   use the product's own OAuth app for <app>: saves its client ID and secret, read from the env",
+      '                    file by the names --id-env and --secret-env give; without them, shows the redirect URL to',
+      '                    register and what is saved; needs what setup writes',
       '  check [folder]    check the code for invented slugs, keys and ids and hand-built URLs against the live',
       '                    catalog (default: the current folder); exits 1 on any FAIL',
       '',
+      '  --id-env <NAME>   oauth-app: the env variable that holds the client ID (the value is never passed here)',
+      '  --secret-env <NAME>  oauth-app: the env variable that holds the client secret',
+      "  --remove          oauth-app: go back to viaSocket's OAuth app for <app>",
       '  --user <id>       connect: the end user it is for, as your agent tools name them (default me)',
       '  --file <file>     mcp: the definition (default viasocket.mcp.json)',
       '  --ids <file>      mcp: where the ids of what it made are kept (default viasocket.mcp.ids.json)',
@@ -112,7 +129,10 @@ function parseArgs(argv) {
     args: '{}',
     token: '',
     app: '',
-    user: 'me'
+    user: 'me',
+    idEnv: '',
+    secretEnv: '',
+    remove: false
   }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -122,8 +142,11 @@ function parseArgs(argv) {
       return value
     }
     if (arg === 'login' || arg === 'setup' || arg === 'mcp') options.command = arg
-    else if (arg === 'connect') options.command = arg
-    else if (options.command === 'connect' && !options.app && !arg.startsWith('-')) options.app = arg
+    else if (arg === 'connect' || arg === 'oauth-app') options.command = arg
+    else if ((options.command === 'connect' || options.command === 'oauth-app') && !options.app && !arg.startsWith('-')) options.app = arg
+    else if (arg === '--id-env') options.idEnv = next()
+    else if (arg === '--secret-env') options.secretEnv = next()
+    else if (arg === '--remove') options.remove = true
     else if (arg === '--user') options.user = next()
     else if (arg === '--env') options.env = next()
     else if (arg === '--file') options.file = next()
@@ -147,6 +170,16 @@ function parseArgs(argv) {
   if (options.command === 'connect' && !options.app) {
     console.error('connect needs the app, by its slug: connect slack')
     usage(2)
+  }
+  if (options.command === 'oauth-app') {
+    if (!options.app) {
+      console.error('oauth-app needs the app, by its slug: oauth-app slack')
+      usage(2)
+    }
+    if (Boolean(options.idEnv) !== Boolean(options.secretEnv)) {
+      console.error('oauth-app needs both names: --id-env <NAME> --secret-env <NAME>')
+      usage(2)
+    }
   }
   return options
 }
@@ -187,16 +220,20 @@ function getEnv(file, key) {
     .replace(/^(['"])(.*)\1$/, '$2')
 }
 
-/** Sets `key=value` in the env file: replaces the line if there is one, appends otherwise. */
+/**
+ * Sets `key=value` in the env file: replaces the line if there is one, appends otherwise. A file it creates is
+ * readable by its owner only (mode 600; Windows has no such mode), since it holds secrets.
+ */
 function setEnv(file, key, value) {
-  const existing = existsSync(file) ? readFileSync(file, 'utf8') : ''
+  const existed = existsSync(file)
+  const existing = existed ? readFileSync(file, 'utf8') : ''
   const eol = existing.includes('\r\n') ? '\r\n' : '\n'
   const lines = existing.split(/\r?\n/)
   while (lines.length && lines[lines.length - 1] === '') lines.pop() // the trailing newline, re-added below
   const index = lines.findIndex((entry) => keyOf(entry) === key)
   if (index >= 0) lines[index] = `${key}=${value}`
   else lines.push(`${key}=${value}`)
-  writeFileSync(file, `${lines.join(eol)}${eol}`)
+  writeFileSync(file, `${lines.join(eol)}${eol}`, existed ? undefined : { mode: 0o600 })
 }
 
 /** Says so when the env file sits in a git repository and is not ignored: it holds secrets and would be committed. */
@@ -209,8 +246,16 @@ function warnIfNotIgnored(file) {
 
 // ---- the sign-in ----------------------------------------------------------------------------------
 
+/** fetch, with a failure that names the host and why instead of "fetch failed", so a blocked host is seen as one. */
+function request(url, init) {
+  return fetch(url, init).catch((error) => {
+    const why = error?.name === 'TimeoutError' ? 'no answer in time' : error?.cause?.code || error?.cause?.message || error?.message
+    throw new Error(`${new URL(url).host} could not be reached (${why}): allow that host from this machine, or check the network`)
+  })
+}
+
 const getJson = async (url) => {
-  const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
+  const response = await request(url, { signal: AbortSignal.timeout(15000) })
   if (!response.ok) throw new Error(`${url} answered ${response.status}`)
   return response.json()
 }
@@ -234,7 +279,7 @@ async function discover(resource) {
 
 /** A client for this run only: the server registers it, so nothing is shipped in this file. */
 async function registerClient(registrationEndpoint, redirectUri) {
-  const response = await fetch(registrationEndpoint, {
+  const response = await request(registrationEndpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -264,7 +309,7 @@ async function exchangeCode({ tokenEndpoint, client, code, redirectUri, verifier
     resource
   })
   if (client.client_secret) body.set('client_secret', client.client_secret)
-  const response = await fetch(tokenEndpoint, {
+  const response = await request(tokenEndpoint, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body,
@@ -276,10 +321,13 @@ async function exchangeCode({ tokenEndpoint, client, code, redirectUri, verifier
   return token
 }
 
-/** The org the token belongs to, with the header the skill uses (the bare token), or null when refused. */
+/**
+ * The org the token belongs to, with the header the skill uses (the bare token), or null when refused. An unreachable
+ * host throws (request names it): that says nothing about the token.
+ */
 async function whoami(token) {
+  const response = await request(WHOAMI_URL, { headers: { Authorization: token }, signal: AbortSignal.timeout(15000) })
   try {
-    const response = await fetch(WHOAMI_URL, { headers: { Authorization: token }, signal: AbortSignal.timeout(15000) })
     if (!response.ok) return null
     // Live shape: { data: { user, org: { id, name } } }; a 401 is a bad token. Older shapes are tolerated.
     const body = await response.json()
@@ -291,13 +339,20 @@ async function whoami(token) {
   }
 }
 
+const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 const page = (title, text) =>
   `<!doctype html><meta charset="utf-8"><title>${title}</title><body style="font:16px system-ui;margin:3em auto;max-width:34em;text-align:center"><h1>${title}</h1><p>${text}</p></body>`
 
-/** Listens on 127.0.0.1 for the browser's redirect; resolves with the code, or null on timeout or refusal. */
+/** Listens on 127.0.0.1 for the browser's redirect; resolves with `{ code }`, `{ error }` when viaSocket refused, or null on timeout. */
 function waitForCode({ state, timeout, onReady }) {
   // onReady gets the port and a `fail` that closes the listener and resolves null (registration failed).
   return new Promise((resolveCode) => {
+    let timer = null
+    const done = (result) => {
+      clearTimeout(timer)
+      server.close()
+      resolveCode(result)
+    }
     const server = createServer((request, response) => {
       const url = new URL(request.url, 'http://127.0.0.1')
       if (url.pathname !== '/callback') {
@@ -312,22 +367,18 @@ function waitForCode({ state, timeout, onReady }) {
       response.end(
         good
           ? page('Signed in', 'You can close this tab and go back to your terminal.')
-          : page('Sign-in failed', error ? `viaSocket answered: ${error}.` : 'The reply did not match this sign-in. Run the command again.')
+          : page(
+              'Sign-in failed',
+              error ? `viaSocket answered: ${escapeHtml(error)}.` : 'The reply did not match this sign-in. Run the command again.'
+            )
       )
-      if (good || error) {
-        server.close()
-        resolveCode(good ? code : null)
-      }
+      if (good) done({ code })
+      else if (error) done({ error })
     })
-    const fail = () => {
-      server.close()
-      resolveCode(null)
-    }
+    const fail = () => done(null)
     server.listen(0, '127.0.0.1', () => onReady(server.address().port, fail))
-    setTimeout(() => {
-      server.close()
-      resolveCode(null)
-    }, timeout * 1000).unref()
+    timer = setTimeout(() => done(null), timeout * 1000)
+    timer.unref()
   })
 }
 
@@ -341,7 +392,7 @@ async function signIn(options) {
   let redirectUri = ''
   let client = null
   let registrationFailed = false
-  const code = await waitForCode({
+  const reply = await waitForCode({
     state,
     timeout: options.timeout,
     onReady: async (port, fail) => {
@@ -364,10 +415,17 @@ async function signIn(options) {
         state,
         resource: RESOURCE
       }).toString()
-      console.log(`Sign in to viaSocket (or sign up), pick your company if it asks, and click Allow (waiting ${options.timeout}s):\n\n  ${url}\n`)
+      console.log(
+        `Sign in to viaSocket (or sign up), pick your company if it asks, and click Allow (waiting ${options.timeout}s):\n\n  ${url}\n`
+      )
       if (options.open) openBrowser(url.toString())
     }
   })
+  if (reply?.error) {
+    console.error(`viaSocket refused the sign-in: ${reply.error}. Run the command again and click Allow.`)
+    return null
+  }
+  const code = reply?.code
   if (!code) {
     if (registrationFailed) return null
     // setup needs the product's three keys, which the token page does not show; login and mcp need the token.
@@ -392,7 +450,7 @@ async function ensureToken(options, envFile) {
   }
   const token = await signIn(options)
   if (!token) return null
-  const org = await whoami(token)
+  const org = await whoami(token).catch(() => null)
   setEnv(envFile, TOKEN_ENV, token)
   if (org?.id) setEnv(envFile, ORG_ENV, org.id)
   if (!org)
@@ -406,7 +464,7 @@ async function ensureToken(options, envFile) {
 
 /** One dashboard API call with the token bare in Authorization; the envelope's `data`, or a thrown status. */
 async function api(token, method, path, body) {
-  const response = await fetch(`${API}${path}`, {
+  const response = await request(`${API}${path}`, {
     method,
     headers: { Authorization: token, ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
@@ -511,7 +569,7 @@ async function embedSecret(token, orgId, projectId) {
 
 /** One management API call with the MCP token; the envelope's `data`, or a thrown status. */
 async function mcpApi(token, method, path, body) {
-  const response = await fetch(`${MCP_API}${path}`, {
+  const response = await request(`${MCP_API}${path}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
@@ -572,8 +630,10 @@ const MCP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 function legacyIds(raw) {
   const server = raw?.server ?? raw?.mcpServerId
   const tools = raw?.tools
-  const toolIds = Boolean(tools) && typeof tools === 'object' && !Array.isArray(tools)
-  // A definition has no server id, and its tools are a list of objects, never names mapped to ids.
+  // A definition lists its tools as objects; an ids file maps their names to ids. A definition that also carries the
+  // old layout's server id is still a definition: keepServerId moves that id to the ids file.
+  if (Array.isArray(tools)) return null
+  const toolIds = Boolean(tools) && typeof tools === 'object'
   const namedIds = toolIds && Object.keys(tools).length > 0 && Object.values(tools).every((id) => typeof id === 'string')
   if (typeof server !== 'string' && !namedIds) return null
   const ids = { ...raw, tools: toolIds ? tools : {} }
@@ -610,6 +670,28 @@ function moveLegacyIds(file, ids, options) {
   )
 }
 
+/**
+ * A definition that still carries the old layout's server id (`server` or `mcpServerId` beside its tools): the id goes
+ * to the ids file when that file has none, so the run updates that server instead of creating a second one. A different
+ * id already there is the server the product's users have, and stays.
+ */
+function keepServerId(raw, options) {
+  const server = raw?.server ?? raw?.mcpServerId
+  if (typeof server !== 'string' || !server) return
+  const idsFile = resolve(process.cwd(), options.ids)
+  const ids = existsSync(idsFile) ? JSON.parse(readFileSync(idsFile, 'utf8')) : {}
+  if (ids.server && ids.server !== server)
+    throw new Error(
+      `${options.file} names server ${server}, but ${options.ids} names ${ids.server}, the server the product's users have. Remove "server" from ${options.file} (or put the right id in ${options.ids}) and rerun.`
+    )
+  if (ids.server) return
+  for (const key of ['slug', 'url']) if (typeof raw[key] === 'string' && !ids[key]) ids[key] = raw[key]
+  writeFileSync(idsFile, `${JSON.stringify({ ...ids, server }, null, 2)}\n`)
+  console.log(
+    `${options.file} names server ${server}: kept in ${options.ids}, where the ids live, so this run updates it. "server" can go from ${options.file}.`
+  )
+}
+
 /** The definition file, checked: what is wrong is said by its key, before anything is created. */
 function readDefinition(options, envFile) {
   const file = resolve(process.cwd(), options.file)
@@ -622,9 +704,21 @@ function readDefinition(options, envFile) {
   }
   const legacy = legacyIds(raw)
   if (legacy) moveLegacyIds(file, legacy, options)
-  const definition = fillEnv(raw, envFile)
+  keepServerId(raw, options)
+  // `${NAME}` is filled only where a value goes, the login and each tool's api: the words every client reads
+  // (instructions, descriptions, skills, prompts) are sent as written, so a value from .env never reaches them.
+  const definition = {
+    ...raw,
+    ...(raw?.login ? { login: fillEnv(raw.login, envFile, 'login') } : {}),
+    ...(Array.isArray(raw?.tools)
+      ? { tools: raw.tools.map((tool, index) => (tool?.api ? { ...tool, api: fillEnv(tool.api, envFile, `tools[${index}].api`) } : tool)) }
+      : {})
+  }
   const fail = (what) => {
     throw new Error(`${options.file}: ${what}`)
+  }
+  const entry = (item, at) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) fail(`${at} must be an object`)
   }
   if (!definition.name || typeof definition.name !== 'string') fail('"name" (the product, shown to users) is required')
   if (definition.slug !== undefined && !MCP_SLUG.test(String(definition.slug)))
@@ -642,6 +736,7 @@ function readDefinition(options, envFile) {
   const names = new Set()
   tools.forEach((tool, index) => {
     const at = `tools[${index}]`
+    entry(tool, at)
     if (!MCP_NAME.test(String(tool.name || ''))) fail(`${at}.name must be snake_case, at most 45 characters`)
     if (names.has(tool.name)) fail(`${at}.name "${tool.name}" is used twice`)
     names.add(tool.name)
@@ -657,17 +752,25 @@ function readDefinition(options, envFile) {
   })
   ;(definition.skills || []).forEach((skill, index) => {
     const at = `skills[${index}]`
+    entry(skill, at)
     if (!MCP_NAME.test(String(skill.name || ''))) fail(`${at}.name must be snake_case, at most 45 characters`)
     if (!skill.description) fail(`${at}.description (one sentence on when to load it) is required`)
     if (!skill.content && !skill.file) fail(`${at} needs "content" (markdown) or "file" (a markdown file next to the definition)`)
     if (skill.file) {
       const skillFile = resolve(file, '..', skill.file)
       if (!existsSync(skillFile)) fail(`${at}.file ${skill.file} does not exist`)
+      // Its text goes to every client that connects: a markdown file of its own in the definition's folder, never
+      // .env or a link to another file.
+      const inFolder = relative(dirname(file), skillFile)
+      const info = lstatSync(skillFile)
+      if (!/\.(md|markdown)$/i.test(skillFile) || inFolder.startsWith('..') || isAbsolute(inFolder) || !info.isFile() || info.nlink > 1)
+        fail(`${at}.file must be a markdown file in the definition's folder, not a link to another file`)
       skill.content = readFileSync(skillFile, 'utf8')
     }
   })
   ;(definition.prompts || []).forEach((prompt, index) => {
     const at = `prompts[${index}]`
+    entry(prompt, at)
     if (!MCP_NAME.test(String(prompt.name || ''))) fail(`${at}.name must be snake_case, at most 45 characters`)
     if (!prompt.content) fail(`${at}.content (the request, with {{argument}} placeholders) is required`)
     for (const argument of prompt.arguments || [])
@@ -708,9 +811,16 @@ function serverBody(definition) {
   }
 }
 
-/** One JSON-RPC request to the MCP URL, as a client sends it; the result, or a thrown status. */
+/**
+ * One JSON-RPC request to the MCP URL, as a client sends it; the result, or a thrown status. A token goes only to the
+ * MCP host: never to another host that an edited ids file names as the url.
+ */
 async function mcpRequest(url, method, params, token) {
-  const response = await fetch(url, {
+  if (token && new URL(url).origin !== new URL(MCP_HOST).origin)
+    throw new Error(
+      `${url} is not on ${MCP_HOST}, so the token is not sent there. Put the server's URL on ${MCP_HOST} back in the ids file and rerun.`
+    )
+  const response = await request(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -739,9 +849,8 @@ const ignore404 = (error) => {
 /** Creates or updates the product's MCP server from the definition; every id goes to the ids file. */
 async function syncMcpServer({ token, definition, idsFile, options }) {
   const ids = existsSync(idsFile) ? JSON.parse(readFileSync(idsFile, 'utf8')) : {}
-  ids.tools ||= {}
-  ids.skills ||= {}
-  ids.prompts ||= {}
+  // Maps with no prototype, so a tool, skill or prompt named like an Object property (constructor) is read as a name.
+  for (const kind of ['tools', 'skills', 'prompts']) ids[kind] = Object.assign(Object.create(null), ids[kind])
   const save = () => writeFileSync(idsFile, `${JSON.stringify(ids, null, 2)}\n`)
   const body = serverBody(definition)
   const changes = []
@@ -900,8 +1009,10 @@ async function mcpCommand(options, envFile) {
     }
     const result = await mcpRequest(ids.url, 'tools/call', { name: options.call, arguments: args }, clientToken)
     const text = (result?.content || []).map((part) => part.text ?? JSON.stringify(part)).join('\n')
-    console.log(`tools/call ${options.call}${result?.isError ? ' FAILED' : ''}:\n${text.slice(0, 2000)}`)
-    if (result?.isError) process.exitCode = 1
+    // A tool that failed answers a text that starts with `Error:`; the MCP host does not set isError (its API reference, section 9.3).
+    const failed = Boolean(result?.isError) || /^Error:/.test(text.trim())
+    console.log(`tools/call ${options.call}${failed ? ' FAILED' : ''}:\n${text.slice(0, 2000)}`)
+    if (failed) process.exitCode = 1
   }
   console.log(`\nMCP URL: ${ids.url}`)
   console.log(
@@ -935,7 +1046,7 @@ function embedToken(orgId, projectId, uniqueIdentifier, secret) {
 
 /** One call to the embed API as the end user; returns `data`, or throws with viaSocket's message. */
 async function embedApi(token, method, path, body) {
-  const response = await fetch(`${API}${path}`, {
+  const response = await request(`${API}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', authorization: token },
     body,
@@ -954,7 +1065,7 @@ async function embedApi(token, method, path, body) {
  * as a bad slug.
  */
 async function serviceIdFor(token, slug) {
-  const response = await fetch(`${API}/embed/services/${encodeURIComponent(slug)}/actions?type=action`, {
+  const response = await request(`${API}/embed/services/${encodeURIComponent(slug)}/actions?type=action`, {
     headers: { authorization: token },
     signal: AbortSignal.timeout(30_000)
   })
@@ -1060,7 +1171,9 @@ async function connectCommand(options, envFile) {
     return
   }
   if (!serviceId) {
-    console.error(`No viaSocket app has the slug "${options.app}". Slugs are exact and lowercase, such as slack, gmail or google-sheets.`)
+    console.error(
+      `No viaSocket app has the slug "${options.app}". Slugs are exact and case-sensitive, such as slack, gmail or google-sheets.`
+    )
     process.exitCode = 1
     return
   }
@@ -1097,6 +1210,116 @@ async function connectCommand(options, envFile) {
   process.exitCode = 0
 }
 
+// ---- the product's own OAuth app for one app -----------------------------------------------------
+
+/**
+ * `oauth-app <app>`: saves, shows or removes the product's own client ID and secret for one app. The keys are read
+ * from the env file by name and go only to viaSocket's API; no line this prints carries either value in full.
+ */
+async function oauthAppCommand(options, envFile) {
+  const [token, projectId] = [TOKEN_ENV, PROJECT_ENV].map((key) => getEnv(envFile, key) || process.env[key] || '')
+  if (!token || !projectId) {
+    console.error(`${envFile} needs ${TOKEN_ENV} and ${PROJECT_ENV}. Run \`npx -y viasocket-apps setup --no-open\` first.`)
+    process.exitCode = 1
+    return
+  }
+  const catalog = await request(`${CATALOG_APP}/${encodeURIComponent(options.app)}`, { signal: AbortSignal.timeout(20000) })
+  const service = catalog.ok ? (await catalog.json().catch(() => null))?.service : null
+  if (!service?.service_id) {
+    console.error(
+      `No viaSocket app has the slug "${options.app}". Slugs are exact and case-sensitive, such as slack, gmail or google-sheets.`
+    )
+    process.exitCode = 1
+    return
+  }
+  const name = service.name || options.app
+  const path = `/projects/${projectId}/oauth-apps/${service.service_id}`
+  const page = `${EMBED_OAUTH_APP}?project=${projectId}&app=${service.service_id}`
+  const describe = (app) =>
+    app?.client_id ? `client ID ${app.client_id}, secret ${app.secret_last4 ? `ending in ${app.secret_last4}` : 'saved'}` : 'saved'
+
+  // A backend without this route (404) is the feature's "not available yet"; a refused token needs a new sign-in.
+  let info
+  try {
+    info = await api(token, 'GET', path)
+  } catch (error) {
+    const status = Number(/answered (\d+)/.exec(String(error?.message))?.[1])
+    if (status === 401 || status === 498) {
+      console.error(
+        `viaSocket refused ${TOKEN_ENV} (${status}): it expired or belongs to another workspace. Run \`npx -y viasocket-apps login\` again.`
+      )
+      process.exitCode = 1
+      return
+    }
+    if (status !== 404) throw error
+    info = { available: false }
+  }
+  if (!info?.available) {
+    console.error(`Not available yet: viaSocket cannot take your own client ID and secret yet. ${name} keeps using viaSocket's OAuth app.`)
+    process.exitCode = 1
+    return
+  }
+  if (!info.supported) {
+    console.error(`${name} does not sign in with OAuth, so it has no client ID and secret to replace.`)
+    process.exitCode = 1
+    return
+  }
+
+  const refused = (error) => {
+    console.error(String(error?.message || error))
+    process.exitCode = 1
+  }
+
+  if (options.remove) {
+    if (!info.app) {
+      console.log(`${name} already uses viaSocket's OAuth app in project ${projectId}.`)
+      return
+    }
+    try {
+      await api(token, 'DELETE', path)
+      console.log(`Removed. New ${name} sign-ins in project ${projectId} go through viaSocket's OAuth app again.`)
+    } catch (error) {
+      refused(error)
+    }
+    return
+  }
+
+  if (!options.idEnv) {
+    console.log(`${name} in project ${projectId}:`)
+    for (const url of info.redirect_urls || [])
+      console.log(`  redirect URL to add to your OAuth app in ${name}'s developer console: ${url}`)
+    console.log(info.app ? `  saved: ${describe(info.app)}` : `  nothing saved: it uses viaSocket's OAuth app`)
+    // Names only, so nobody has to open the env file to find them; a value never leaves this function.
+    const names = envLines(envFile)
+      .map(keyOf)
+      .filter((key) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && /client.?(id|secret)|consumer.?(key|secret)|app.?secret/i.test(key))
+    console.log(`  variables in ${options.env} that look like a client ID or secret: ${names.length ? names.join(', ') : 'none'}`)
+    console.log(`  to save from ${options.env}: npx -y viasocket-apps oauth-app ${options.app} --id-env <NAME> --secret-env <NAME>`)
+    console.log(`  or by hand: ${page}`)
+    return
+  }
+
+  const [clientId, clientSecret] = [options.idEnv, options.secretEnv].map((key) => (getEnv(envFile, key) || process.env[key] || '').trim())
+  const missing = [!clientId && options.idEnv, !clientSecret && options.secretEnv].filter(Boolean)
+  if (missing.length) {
+    console.error(`${envFile} has no value for ${missing.join(' and ')}. Put them there, or save the keys by hand: ${page}`)
+    process.exitCode = 1
+    return
+  }
+  try {
+    const saved = await api(token, 'PUT', path, {
+      client_id: clientId,
+      client_secret: clientSecret
+    })
+    console.log(`Saved. ${name} sign-ins in project ${projectId} now go through your OAuth app (${describe(saved?.app)}).`)
+    for (const url of saved?.redirect_urls || []) console.log(`Your OAuth app must allow this redirect URL: ${url}`)
+    console.log(`Connections made before this keep working on viaSocket's OAuth app until the user reconnects.`)
+    warnIfNotIgnored(envFile)
+  } catch (error) {
+    refused(error)
+  }
+}
+
 // ---- the checker ------------------------------------------------------------------------------------
 
 /**
@@ -1123,6 +1346,7 @@ async function main() {
 
   if (options.command === 'mcp') return mcpCommand(options, envFile)
   if (options.command === 'connect') return connectCommand(options, envFile)
+  if (options.command === 'oauth-app') return oauthAppCommand(options, envFile)
 
   if (options.command === 'login') {
     // An explicit login always signs in: that is how a developer switches workspace.
@@ -1131,7 +1355,7 @@ async function main() {
       process.exitCode = 1
       return
     }
-    const org = await whoami(token)
+    const org = await whoami(token).catch(() => null)
     setEnv(envFile, TOKEN_ENV, token)
     if (org?.id) setEnv(envFile, ORG_ENV, org.id)
     if (!org)

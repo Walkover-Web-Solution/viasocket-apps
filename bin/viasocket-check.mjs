@@ -13,7 +13,8 @@
  *     of that app's keys (keys are case-sensitive; the page path `send-email` is not the key)
  *   - a service_id names a real app — not the app's name, its slug, or the id with a name joined on
  *   - an action's or trigger's id sits where the call takes that kind of id (the two ids look alike:
- *     the id-based run, list-options and subscribe-event take the version id; everything else the plain one)
+ *     the id-based run, list-options and subscribe-event take the version id; everything else the plain one;
+ *     update-subscribed-event takes the script_id that enable or subscribe returned, never a catalog id)
  *   - every viasocket URL is a published endpoint — never a popup or auth-page URL built by hand
  *   - the embed secret is not a string literal in source
  *   - the connect script is reachable; the embed token works (VIASOCKET_TEST_EMBED_TOKEN, optional)
@@ -95,9 +96,49 @@ const ID = /(?<![A-Za-z0-9_])row[a-z0-9]{6,9}(?![A-Za-z0-9_])/g
 const COMPOSED_ID = /(["'`])(row[a-z0-9]{6,9}[_-][A-Za-z0-9_-]+)\1/g
 const VIASOCKET_URL = /https?:\/\/[a-z0-9.-]*(?:viasocket\.com|sokt\.io)[^\s'"`<>)]*/gi
 const SECRET_LITERAL = /VIASOCKET_EMBED_SECRET\s*[=:]\s*["'][^"'\n]{6,}["']/
-const EXPECTS_VERSION = /list-options|subscribe-event|update-subscribed-event|version/i
+const EXPECTS_VERSION = /list-options|subscribe-event|version/i
 const EXPECTS_PLAIN = /filteredActions|filteredServices|service_action_functions|action_id|trigger_id|actionId|triggerId|open\s*:/
 const EXPECTS_SERVICE = /service_id|serviceId(?!For)|\/enable\//
+/** PUT /embed/update-subscribed-event/<script_id>: the flow's id that enable or subscribe returned, never a catalog id. */
+const EXPECTS_SCRIPT = /update-subscribed-event/i
+/** A key or path word that says which id follows it. The nearest one before an id on its line decides, so in
+ * `open: { serviceId: 'rowbu58rc' }` the id is the app's, and in `filteredServices: { rowbu58rc: { row1jrbor: true } }`
+ * the first is the app's and the second its event's. A line with none of them is read as a whole, with the words above. */
+const KEY_BEFORE_ID =
+  /(?<![A-Za-z0-9])(action_version_id|trigger_version_id|service_id|serviceId(?!For)|action_id|actionId|trigger_id|triggerId|filteredServices|filteredActions)(?![A-Za-z0-9_])|(list-options|subscribe-event|update-subscribed-event|\/enable\/|openViasocketConnection)/g
+const KIND_OF_KEY = {
+  action_version_id: 'version',
+  trigger_version_id: 'version',
+  'list-options': 'version',
+  'subscribe-event': 'version',
+  service_id: 'service',
+  serviceId: 'service',
+  '/enable/': 'service',
+  openViasocketConnection: 'service', // openViasocketConnection(token, <service_id>, { filteredActions })
+  action_id: 'plain',
+  actionId: 'plain',
+  trigger_id: 'plain',
+  triggerId: 'plain',
+  filteredActions: 'plain',
+  'update-subscribed-event': 'script'
+}
+/** Which kind of id the line takes at `index`: service, plain, version, script, or null when it does not say. */
+const expectsAt = (line, index) => {
+  const before = line.slice(0, index)
+  const key = [...before.matchAll(KEY_BEFORE_ID)].at(-1)
+  const name = key?.[1] || key?.[2]
+  if (name && name !== 'filteredServices') return KIND_OF_KEY[name]
+  if (name) {
+    // filteredServices: { <service_id>: { <action_id or trigger_id>: true } }: one brace deep is the app, deeper its events
+    const inside = before.slice(key.index)
+    const depth = (inside.match(/[{[]/g) || []).length - (inside.match(/[}\]]/g) || []).length
+    return depth <= 1 ? 'service' : 'plain'
+  }
+  if (EXPECTS_SCRIPT.test(line)) return 'script'
+  const version = EXPECTS_VERSION.test(line)
+  const plain = EXPECTS_PLAIN.test(line)
+  return EXPECTS_SERVICE.test(line) && !version && !plain ? 'service' : version && !plain ? 'version' : plain && !version ? 'plain' : null
+}
 /** A slug the code names: serviceIdFor('slack'), serviceIds['slack'], listEvents('slack'), the slug argument of
  * findEnabledApp / enableApp, slug: 'slack', VIASOCKET_APP_SLUG = 'slack'. A bare `slug` names an app for sure only in a
  * project where some file hands a slug to one of those calls (apps are often listed in one file and looked up in
@@ -182,6 +223,20 @@ const scannable = (file) => {
   return EXTENSIONS.has(extname(name))
 }
 
+if (process.argv.slice(2).some((arg) => arg === '-h' || arg === '--help')) {
+  console.log(
+    [
+      'usage: node viasocket-check.mjs [folder or file ...]        (or: npx -y viasocket-apps check [folder or file ...])',
+      '',
+      "  Checks the code's viaSocket slugs, keys, ids and URLs against the live catalog, and that the embed secret is",
+      '  not a literal in source. Default: the current folder. Exits 1 on any FAIL.',
+      '',
+      '  VIASOCKET_TEST_EMBED_TOKEN=<token>   also checks that this embed token works (optional)',
+      '  -h, --help                           this text'
+    ].join('\n')
+  )
+  process.exit(0)
+}
 const roots = process.argv.slice(2).length ? process.argv.slice(2) : ['.']
 const ids = new Map() // id → [{ where, expects }]
 const urls = []
@@ -245,10 +300,7 @@ for (const root of roots) {
         if ([...line.matchAll(SLUG_USE)].some((use) => use[2] === match[0])) continue
         // versionIdFor(app, 'row1jrbor', 'V107') names the event by its plain id; the version id is what it returns.
         const eventArg = [...line.matchAll(EVENT_ARG)].some((use) => use[2] === match[0])
-        const version = !eventArg && EXPECTS_VERSION.test(line)
-        const plain = eventArg || EXPECTS_PLAIN.test(line)
-        const expects =
-          EXPECTS_SERVICE.test(line) && !version && !plain ? 'service' : version && !plain ? 'version' : plain && !version ? 'plain' : null
+        const expects = eventArg ? 'plain' : expectsAt(line, match.index)
         if (!ids.has(match[0])) ids.set(match[0], [])
         ids.get(match[0]).push({ where: at, expects })
       }
@@ -263,7 +315,8 @@ if (!filesScanned) {
 }
 
 // ---- URLs -----------------------------------------------------------------------------------
-for (const { where, url } of urls) {
+for (const { where, url: found } of urls) {
+  const url = found.replace(/[.,;:!?\]}]+$/, '') // the full stop or comma of a sentence it ends
   // A base URL in a constant (`https://flow-api.viasocket.com`) counts as its prefix.
   if (KNOWN_URL_PREFIXES.some((prefix) => `${url}/`.startsWith(prefix))) continue
   // A bare origin is a base constant (the apps module's `https://flow.sokt.io`) or an origin compared against a
@@ -433,8 +486,18 @@ for (const use of versionUses) {
 }
 
 const appNames = [...services.values()].map((app) => app.service.name)
-for (const [id, uses] of ids) {
+for (const [id, allUses] of ids) {
   const known = kinds.get(id)
+  // update-subscribed-event takes the flow's script_id, which no catalog lists: a catalog id there is the wrong id
+  for (const use of allUses)
+    if (use.expects === 'script')
+      say(
+        'FAIL',
+        use.where,
+        `update-subscribed-event takes the script_id that enableApp or subscribeEvent returned, not '${id}'${known ? ` (${known.app}'s ${known.what || 'service_id'})` : ''}`
+      )
+  const uses = allUses.filter((use) => use.expects !== 'script')
+  if (!uses.length) continue
   if (!known) {
     const serviceUse = uses.find((use) => use.expects === 'service')
     if (serviceUse) say('FAIL', serviceUse.where, `'${id}' names no app — ${SEARCH_HINT}`)

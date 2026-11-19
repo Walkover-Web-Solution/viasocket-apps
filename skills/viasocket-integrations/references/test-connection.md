@@ -5,20 +5,21 @@ Back to the skill: https://viasocket.com/docs/skill.md
 One real run on a test account is what makes the rest of the build true: code written from a page's sample breaks on
 the first real response. Running an action or fetching a trigger's real event needs a connection, and only a person
 can sign in. This is a step of every app integration, not an option: code that never ran against a real connection is
-**UNTESTED** (the skill's "On every job" says what that means), and the report says so per action and trigger.
+**UNTESTED** (the skill's "Build and test" says what that means), and the report says so per action and trigger.
 
-The test user is the product's own id for whoever connects during the test:
+The test user id is the product's own id for whoever connects during the test:
 
 - `apps-api-test-user` for the command below and for calls made without the product;
 - or the id the product gives the test account that clicks its own Connect button.
 
-Every test call runs as that user
-(`userId` `'apps-api-test-user'`);
-its ids never go into the product's code, and its users connect their own.
+Every test call runs as that id
+(`userId` = the test user id), whichever
+of the two it is; its ids never go into the product's code, and its users connect their own.
 
 ## 1. Through the product's own Connect button
 
-The way the product's users will connect is the way to test, so the Connect button is the first screen to build
+The way the product's users will connect is the way to test, so the Connect button is the first screen to build,
+the command below standing in until it is
 (connect.md): the token endpoint, the button with the app's icon, and the
 endpoint that stores the `auth_id`. Run the product, signed in with a test account of its own (make one when it has
 none), and ask, in the first line of a message:
@@ -40,7 +41,9 @@ npx -y viasocket-apps connect <app_slug> --user apps-api-test-user --no-open
 It serves a one-button page on `127.0.0.1` that opens viaSocket's Connect popup for that app, prints the page's URL
 (`--no-open`: printed, never opened in their browser by the command),
 and when the sign-in lands it enables the app for that user (or finds it already enabled). Ask them to open the URL it
-prints, click Connect and sign in.
+prints, click Connect and sign in. It waits up to five minutes: run it in the background when your environment runs
+commands to completion. Only on the machine their browser can reach (a cloud sandbox's `127.0.0.1` is not): otherwise
+section 1.
 
 ## 3. With the viaSocket connector or the agent token
 
@@ -52,8 +55,8 @@ still run as its test user, connected through 1 or 2.
 
 ## When the connection is there
 
-1. `listConnections('apps-api-test-user')`: the entry whose `id` ends in
-   `_<service_id>` of the app is the connection; that `id` is the `auth_id`. Through the product's own button it is
+1. `listConnections(<test user id>)`: the entry whose `identifier` ends in
+   `_<service_id>` of the app is the connection; that `identifier` is the `auth_id`. Through the product's own button it is
    already stored where the product keeps it.
 2. Enable the app for that user and run each action once against a test target. How:
    actions-and-events.md, "The order".

@@ -2,12 +2,18 @@
 
 Back to the skill: https://viasocket.com/docs/skill.md
 
+Contents: Find what to call; The tags on an action's keys; The order; Keys, versions and values; Options; Your own code with the user's connection; Events; When it goes wrong
+
 Here the product acts in its users' apps and hears from them. With the user's `auth_id`
 (connect.md) it reads options from their account, runs the app's actions and reacts
 to its events. Every key decided on this page is a question the user is never asked twice, or an action that never
 fails on a guessed value. Code names the app by its **slug** (`gmail`), an action or trigger by its **key**
 (`Send_Email`) and a version by its number (`v55`) when it runs an action; a row id (`action_id`) only where a page says
 so (a flow step, a sample event).
+
+The word **event** has two senses, here and on the app's pages: an action or a trigger (one row of the app's page, one
+entry of the listing: "each event's key"); and, in "Events" below, what a trigger reports when it fires, as a handler
+receives it.
 
 Every function named here (`findEnabledApp`, `runAction`, …) is defined in https://viasocket.com/docs/apps-api.md:
 copy its module once.
@@ -43,20 +49,20 @@ after that step and the next step runs when the wait ends, which an enabled app'
 (ai-steps.md). Enable an
 app only when nobody knows the action until it runs: the product's AI picking from tool definitions.
 
-When it is the enabled app: enabling creates one flow (its `script_id`) per user and app that runs any of that
-app's actions; do it once, store the `script_id`, and run every action through it. Each id comes from the step before
-it.
+When it is the enabled app: enabling creates one flow (its `script_id`) per user and connection (`auth_id`) that
+runs any of that app's actions through that connection; do it once per connection, store the `script_id` with its
+`auth_id`, and run every action through it. Each id comes from the step before it.
 
 A `script_id` is a credential. Running an action through it needs no token: the id alone acts as that user on that
 app, which is why the server sends no embed token at run time. So the `auth_id`, the enabled app's `script_id` and
-each subscription's `script_id` are stored on the server per user and app, like a password: never in the browser, a
+each subscription's `script_id` are stored on the server per user and connection, like a password: never in the browser, a
 URL, a log or client code, and never handed to another user. Before running an action, the product's endpoint checks
 that the signed-in user owns the `script_id` it is about to use; a request naming someone else's id is refused.
 
 ```js
 const slug = '<app_slug>'
 
-// run an action (enable once per user and app)
+// run an action (enable once per user and connection)
 const scriptId = (await findEnabledApp(userId, slug)) || (await enableApp(userId, slug, authId))
 const { options } = await listOptions(userId, slug, '<action_key>', { fieldKey: '<dotted.key>', authId, existingFields }) // per PICK key
 const result = await runAction(scriptId, '<action_key>', actionInput, { version: '<version>' })
@@ -88,10 +94,11 @@ enabled again.
 - **One key per event.** Running, options and subscribing name an action or trigger by its key, plus a version.
   The sample event, automations, the prebuilt UI and Connect's `filteredActions`
   take the plain `action_id` / `trigger_id` instead (`action_id` in the listing, on the event's page).
-- **Pin the version when code fills the `inputData`.** A newer version may rename or add fields; the pinned one keeps
-  the call working until the code is moved on purpose. Leave the version out when the user fills the form from the
-  live schema, so they get the current fields. The listing says which version is published and which others exist;
-  a version it does not list answers 404.
+- **Pass the version whose fields you send.** Code that fills the `inputData` pins it: a newer version may rename or
+  add fields, and the pinned one keeps the call working until the code is moved on purpose. A form the user fills
+  passes the version it was rendered for, on `listOptions` and on the run, as https://viasocket.com/docs/form-renderer.md
+  does; left out, the run takes the published version, which may have changed since the form was drawn. The listing
+  says which version is published and which others exist; a version it does not list answers 404.
 - **Copy keys, never type them.** Field keys are case-sensitive and differ between actions of one app (`spreadsheet_Id`,
   `spreadSheet_id`); nested keys are full dotted paths.
 - **Decide every key.** Send it or leave it out on purpose; never drop a required one because it looks technical.
@@ -185,24 +192,25 @@ return out`
 - Save `{ userId, app, trigger_key, version, script_id, auth_id, inputData, handler }` in the product's database in
   the same write that records the subscribe call's result: the flow list returns neither `inputData` nor the handler,
   so this record is the only copy.
-- A polled trigger takes `scheduledTime` (minutes, as a string) in `inputData`.
+- `scheduledTime` (minutes, as a string) in `inputData` sets how often a trigger that polls checks; left out, it is
+  `"15"`.
 - `{ webhook: url }` instead of `{ code }` only when the person you work for asks for exactly that.
 
 ## When it goes wrong
 
-| symptom                                                     | cause                                                                                                                                                   |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 401 / invalid token                                         | Wrong secret, a claim missing, or a `Bearer` prefix.                                                                                                    |
-| 404 unknown app, action or version                          | A slug, key or version typed from memory: copy it from the page or the listing. Keys are case-sensitive; the page's path (`send-email`) is not the key. |
-| Empty option list                                           | `fieldKey` is the leaf, `existingFields` is flat or misses a dependency; or the field answered a `message`: show it.                                    |
-| Options throw `Auth data not found`                         | The connection is revoked or belongs to another user. Reconnect.                                                                                        |
-| The app rejects the action                                  | An invented value for a `PICK` key, or a `WHEN` key sent while its condition is false.                                                                  |
-| A run fails with the app's message                          | The reply is `400` with `errorMsg: { status, message, data }`: the app's own status and message are in there.                                           |
-| The user is asked the same thing in every action            | A once-per-user `PICK` (site, property, workspace) built per run: choose it once after Connect.                                                         |
-| Code reads `undefined` from a result or an event            | The shape came from a sample, not from a real run or a real event.                                                                                      |
-| `sampleEvent` answers `"No response"`                       | It got a version id or a key; it takes the plain `trigger_id` (`actionId` in the listing).                                                              |
-| The fields changed under the code                           | The app published a newer version and the code names none: pin the version, or reread the page.                                                         |
-| The same event fires twice, or two `script_id`s for one app | Subscribed or enabled twice: check the saved record and the enabled app first.                                                                          |
-| A user's connections seem lost                              | A different `userId` (`unique_identifier`) for the same person.                                                                                         |
+| symptom | cause |
+| --- | --- |
+| 401 / invalid token | Wrong secret, a claim missing, or a `Bearer` prefix. |
+| 404 unknown app, action or version | A slug, key or version typed from memory: copy it from the page or the listing. Keys are case-sensitive; the page's path (`send-email`) is not the key. |
+| Empty option list | `fieldKey` is the leaf, `existingFields` is flat or misses a dependency; or the field answered a `message`: show it. |
+| Options throw `Auth data not found` | The connection is revoked or belongs to another user. Reconnect. |
+| The app rejects the action | An invented value for a `PICK` key, or a `WHEN` key sent while its condition is false. |
+| A run fails with the app's message | The reply is `400` with `errorMsg: { status, message, data }`: the app's own status and message are in there. |
+| The user is asked the same thing in every action | A once-per-user `PICK` (site, property, workspace) built per run: choose it once after Connect. |
+| Code reads `undefined` from a result or an event | The shape came from a sample, not from a real run or a real event. |
+| `sampleEvent` answers `"No response"` | It got a version id or a key; it takes the plain `trigger_id` (`action_id` in the listing). |
+| The fields changed under the code | The app published a newer version and the code names none: pin the version, or reread the page. |
+| The same event fires twice, or two `script_id`s for one app | Subscribed or enabled twice: check the saved record and the enabled app first. |
+| A user's connections seem lost | A different `userId` (`unique_identifier`) for the same person. |
 
 END OF PAGE

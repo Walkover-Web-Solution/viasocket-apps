@@ -2,6 +2,8 @@
 
 Back to the skill: https://viasocket.com/docs/skill.md
 
+Contents: Words; Rules; Steps; After it is saved
+
 A product's users sign in to an app (Slack, Google Sheets) through viaSocket's OAuth app: nothing to register, and it
 works at once. A product that has its own OAuth app with that provider can use it instead. Its users then see the
 product's name on the provider's consent screen, and the provider's limits and review are the product's own.
@@ -15,13 +17,13 @@ name". Never propose it, and never ask anyone to create an OAuth app: viaSocket'
 
 ## Words
 
-| word          | means                                                                                                        |
-| ------------- | ------------------------------------------------------------------------------------------------------------ |
-| OAuth app     | what the person registered in the provider's developer console; it has a client ID and a client secret       |
-| client ID     | the OAuth app's public name at the provider. Not a secret: viaSocket shows it back, and you may repeat it    |
-| client secret | the OAuth app's password at the provider. You never see it                                                   |
-| redirect URL  | the address the provider sends a user back to after they sign in; it is viaSocket's, the same for every user |
-| the project   | the product's home in viaSocket, `VIASOCKET_PROJECT_ID` in `.env`; the two values are saved for it           |
+| word | means |
+| --- | --- |
+| OAuth app | what the person registered in the provider's developer console; it has a client ID and a client secret |
+| client ID | the OAuth app's public name at the provider. Not a secret: viaSocket shows it back, and you may repeat it |
+| client secret | the OAuth app's password at the provider. You never see it |
+| redirect URL | the address the provider sends a user back to after they sign in; it is viaSocket's, the same for every user |
+| the project | the product's home in viaSocket, `VIASOCKET_PROJECT_ID` in `.env`; the two values are saved for it. Not in `.env` yet: setup.md first |
 
 ## Rules
 
@@ -48,7 +50,8 @@ name". Never propose it, and never ask anyone to create an OAuth app: viaSocket'
    ```
 
    It prints the redirect URL, what is saved, and the names (never the values) of the variables in `.env` that look
-   like a client ID or a client secret. That it answers is also the check that the sign-in works. Without a command
+   like a client ID or a client secret. That it answers is also the check that the sign-in works. A package that
+   answers `unknown option: oauth-app` is older than the command: take the call below. Without a command
    to run, the same answer is one call, with the `service_id` shown on the app's page
    (https://viasocket.com/docs/<app slug>.md):
 
@@ -59,17 +62,17 @@ name". Never propose it, and never ask anyone to create an OAuth app: viaSocket'
 
    Its reply, under `data`:
 
-   | field           | means                                                                                                  |
-   | --------------- | ------------------------------------------------------------------------------------------------------ |
-   | `available`     | `false`: viaSocket cannot take a product's own client ID and secret yet. Say so in the report and stop |
-   | `supported`     | `false`: this app does not sign in with OAuth, so it has nothing to replace. Say so and stop           |
-   | `redirect_urls` | every redirect URL for step 3                                                                          |
-   | `app`           | `null` when nothing is saved; else `client_id` and `secret_last4`                                      |
+   | field | means |
+   | --- | --- |
+   | `available` | `false`: viaSocket cannot take a product's own client ID and secret yet. Say so in the report and stop |
+   | `supported` | `false`: this app does not sign in with OAuth, so it has nothing to replace. Say so and stop |
+   | `redirect_urls` | every redirect URL for step 3 |
+   | `app` | `null` when nothing is saved; else `client_id` and `secret_last4` |
 
    With neither a command nor the two `.env` values to make that call, skip to step 4's page: it shows the redirect
    URL itself.
 
-2. **Plan, then a yes,** as the skill's "The person you work for" says. The three lines: what their users will see
+2. **Plan, then a yes,** as the skill's "Plan, then a yes" says. The three lines: what their users will see
    (the app's consent screen with their own app's name), the one thing they do in the provider's console, and that
    people already connected keep working as they are.
 3. **The redirect URL goes into their OAuth app.** Only they can do it. One ask, its first line, with a link to the
