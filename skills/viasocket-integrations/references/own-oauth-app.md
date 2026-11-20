@@ -49,8 +49,10 @@ name". Never propose it, and never ask anyone to create an OAuth app: viaSocket'
    npx -y viasocket-apps oauth-app <app_slug>
    ```
 
-   It prints the redirect URL, what is saved, and the names (never the values) of the variables in `.env` that look
-   like a client ID or a client secret. That it answers is also the check that the sign-in works. A package that
+   It prints the redirect URL, what is saved, the names (never the values) of the variables in `.env` that look
+   like a client ID or a client secret, and, after `or by hand:`, the link to the page of step 4. That it answers is
+   also the check that the sign-in works. When viaSocket refuses the token (401 or 498) it says so: sign in again with
+   `npx -y viasocket-apps login`. A package that
    answers `unknown option: oauth-app` is older than the command: take the call below. Without a command
    to run, the same answer is one call, with the `service_id` shown on the app's page
    (https://viasocket.com/docs/<app slug>.md):
@@ -95,10 +97,11 @@ name". Never propose it, and never ask anyone to create an OAuth app: viaSocket'
    - **Otherwise the page.** It signs them in, shows the redirect URL of step 3 and takes the two values. One ask,
      its first line:
 
-     > Open https://flow.viasocket.com/embed-oauth-app?app=<app_slug>, paste your client ID and client secret, and
+     > Open `https://flow.viasocket.com/embed-oauth-app?app=<service_id>`, paste your client ID and client secret, and
      > click **Save**.
 
-     Add `&project=<VIASOCKET_PROJECT_ID>` when you know it; without it the page asks which product.
+     Use the link step 1 printed after `or by hand:` when you have it: it already carries `&project=<VIASOCKET_PROJECT_ID>`
+     and the app's `service_id`. Leave `&project=…` out when you do not know it; the page then asks which product.
 
 5. **Check with a new sign-in.** A connection made before step 4 proves nothing: it still runs on viaSocket's OAuth
    app. So connect as a user who has never connected this app (test-connection.md,

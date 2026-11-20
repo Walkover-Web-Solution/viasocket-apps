@@ -44,6 +44,15 @@ When they click Allow, it:
 
 It changes no billing, no limits and no settings of an existing project.
 
+**A secret that leaked** (pasted in a chat, shown in a screenshot, committed) is replaced, not kept: on the embed
+project's **Settings** page in viaSocket, section **Signing secret**, the **Replace** button makes a new one; from
+code, `POST https://flow-api.viasocket.com/projects/$VIASOCKET_PROJECT_ID/secret` with the `Authorization: $VIASOCKET_AGENT_TOKEN`
+header answers `data.secret`, the new one (`DELETE` on the same path removes it). Tokens signed with the old project
+secret are refused from the next sign-in on, so every server that signs embed tokens gets the new value in its `.env`
+at once; nothing else changes: connections, flows and ids stay. The workspace's own key (the one the Configuration
+page shows) cannot be replaced today: a product still signing with it moves to a project secret of its own, which
+the setup command creates.
+
 - Always `--no-open`: without it the command opens a tab in their browser by itself, and people lose the chat. Run it
   in the background when your environment runs commands to completion, and read its output once it exits: the line
   naming the workspace, the project and the file. It never prints a secret; never open `.env` to check.

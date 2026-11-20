@@ -8,7 +8,7 @@ A user connects one of their apps once, from the product's own screen, and the p
 token: viaSocket keeps the connection alive. What the product keeps is the `auth_id` the connection answers, one per
 user and app, stored on the server. An app without sign-in has no Connect button: its `auth_id` is `NoAuth`.
 
-Every function named here (`findEnabledApp`, `runAction`, …) is defined in https://viasocket.com/docs/apps-api.md:
+Every function named here (`embedToken`, `serviceIdFor`) is defined in https://viasocket.com/docs/apps-api.md:
 copy its module once.
 
 ## 1. The token endpoint (server)
@@ -30,7 +30,9 @@ app.get('/api/viasocket/token', requireLogin, async (req, res) => {
 
 ## 2. The Connect button (browser)
 
-It shows the app's icon and name.
+It shows the app's icon (on the app's page) and name. The popup opens from the click itself, before any `await`, so
+fetch the token on page load. Only `openViasocketConnection` opens the
+popup: a hand-built viasocket URL, `window.open` or an iframe shows "Page not found".
 
 ```html
 <script src="https://flow.viasocket.com/connect.js"></script>
@@ -53,27 +55,28 @@ It shows the app's icon and name.
 </script>
 ```
 
-The popup opens from the click itself, before any `await`: fetch the token on page load. The call also resolves with
+The call also resolves with
 `{ status: 'success' | 'error' | 'closed', … }`; `closed` is not a failure, a success may still follow through
-`onSuccess`. The script posts the same results as `message` events on the window, from the page itself
-(`event.source === window`); the callbacks need none of that, and a listener that trusts any `message` would also
-take a forged one.
+`onSuccess`. The script also posts the same results as `message` events on the window; the callbacks need no listener. If you
+add one, accept only events from the page itself (`event.source === window`): a listener that trusts any `message`
+would also take a forged one.
 
 ## 3. Right after Connect
 
 Some apps need one choice per user before any action makes sense: their site, property, workspace or board. The
-pages of its events list them in a **Pickers** section (its last column names an event that lists a key with less needed first). Make that choice part of connecting and store it with the `auth_id`.
+pages of its events list them in a **Pickers** section (its last column names another event that lists the same key and
+needs less filled in first: list the key from that one). Make that choice part of connecting and store it with the
+`auth_id`.
 The rule and the code: actions-and-events.md, "Once, or per run".
 
 ## Rules
 
-- Only `openViasocketConnection` opens the popup: a hand-built
-  viasocket URL, `window.open` or an iframe shows "Page not found".
 - The browser's token lives an hour (`expiresIn: '1h'`), and the page may stay open longer: a click after that hour
   ends with `status: 'error'` ("Embed token could not be verified"). Fetch the token again before the hour ends (a
   timer, or when the tab becomes visible again), or sign the browser's token for as long as a page stays open.
 - An expired connection (`isExpired: true` in the user's connections) is reconnected in place with its `authId`,
-  so nothing stored against it changes.
+  so nothing stored against it changes. The product hears of the expiry without polling through the alert of
+  alerts.md.
 - One user's `auth_id` never serves another user. If the product's end users serve customers of their own, the end
   user connects, never their customer.
 - An `auth_id` ends in `_<service_id>` but is one opaque value: never split or build it.

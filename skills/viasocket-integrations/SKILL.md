@@ -20,7 +20,7 @@ compatibility: >-
   proxy.msg91.com; plug work also app.docstar.io (the Developer Hub API reference). Any language; the viasocket-apps package runs on Node 20+, Bun, Deno and edge runtimes.
 metadata:
   author: viaSocket
-  version: '2026-11-20.5'
+  version: '2026-11-20.6'
 ---
 
 # viaSocket
@@ -111,7 +111,8 @@ live here; the last two are about their product, because the person makes them o
 
 The product acts for each of its users, each with their own apps, workflows, AI and memory, and the product's own
 code stays a few calls per feature. Three keys let it do that, written once by
-references/setup.md.
+references/setup.md. Alerts to the product's server when a user's connection expires or a
+user's flow fails: references/alerts.md.
 
 - **Users connect their own apps, and the product acts in them.**
   They say: "let my users connect their Slack, Gmail or Sheets and do things there".
@@ -315,6 +316,6 @@ the details, one line each:
 Do what you can yourself (a database change, a config line). What only someone else can do (put code live on a
 server they run) goes in a file of its own for that person, not in `viasocket-plan.md`.
 
-Skill version `2026-11-20.5`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
+Skill version `2026-11-20.6`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
 
 END OF PAGE

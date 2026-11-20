@@ -48,6 +48,7 @@ viaSocket keeps each connection alive, and the product keeps one id per user and
    | pick the AI action for a job (write, classify, decide, draw), run it cheaper in the background, or use any step whose reply comes later | ai-steps.md |
    | sign its users in through its own OAuth app (its own client ID and secret for an app), when the person asks for that | own-oauth-app.md |
    | list, pause, reconnect or revoke what a user has | manage.md |
+   | be told on its server when a user's connection expires or a user's flow fails | alerts.md |
    | give its own AI agent the user's connected apps as tools (LangChain, Vercel AI SDK or any framework) | the enabled app on actions-and-events.md: a tool per action, its parameters from the action's page or `listEvents`, `runAction` for the one the agent picks |
 
 5. **Check.** Run the checker over the integration's code and fix every FAIL; it catches invented slugs, keys and
