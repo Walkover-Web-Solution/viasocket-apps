@@ -1107,7 +1107,11 @@ export class UserScope {
     return { scriptId: data.script_id, title: data.title, status: String(data.status) }
   }
 
-  /** Saves, or replaces, what starts the flow. Another user's flow is a 403; a field the trigger type does not take, a 400 naming it. */
+  /**
+   * Saves, or replaces, what starts the flow. Another user's flow is a 403; a field the trigger type does not take, a 400 naming it.
+   * A `plugin` trigger also subscribes with the app and fetches one live sample event from it, so this call can take
+   * some seconds: do not abort it with a short timeout of your own (an abort is not a refusal; the save may have landed).
+   */
   async setTrigger(scriptId: string, trigger: AutomationTrigger): Promise<AutomationTriggerResult> {
     const data = await this.automationCall<Record<string, unknown>>('POST', `/automations/${required('scriptId', scriptId)}/trigger`, triggerBody(trigger))
     return toTriggerResult(data)

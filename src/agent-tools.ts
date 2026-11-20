@@ -97,6 +97,7 @@ function fieldSchema(
   switch (block.type) {
     case 'string':
     case 'markdown':
+    case 'html': // a rich-text body (Gmail's messageBody): sent as the string the field holds
     case 'aifield':
     case 'date':
       return { type: 'string', description: describe(block, false) }
