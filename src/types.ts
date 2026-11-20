@@ -470,7 +470,7 @@ export interface AiSendParams {
   /** `text` (default); `json_object`; or `json_schema`, which needs `jsonSchema`. */
   responseType?: 'text' | 'json_object' | 'json_schema'
   jsonSchema?: { name: string; schema: Record<string, unknown>; strict?: boolean }
-  /** A model and its provider, always together: `model: 'gpt-5.6-luna', service: 'openai'`. Omit both for the default. */
+  /** A model and its provider, always together: `model: 'gpt-6-luna', service: 'openai'`. Omit both for the default. */
   model?: string
   service?: string
   /** Up to 20. Only the ones this conversation can need. */

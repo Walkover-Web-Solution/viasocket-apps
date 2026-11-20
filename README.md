@@ -405,7 +405,7 @@ const agent = new Agent({
   id: 'ops-agent',
   name: 'Ops agent',
   instructions: 'Keep the team updated in Slack.',
-  model: 'openai/gpt-4o-mini',
+  model: 'openai/gpt-6-luna',
   tools: await viasocketTools(viasocket, { user: 'user_123', apps: ['slack'], actions: { slack: ['send-message'] } })
 })
 ```
