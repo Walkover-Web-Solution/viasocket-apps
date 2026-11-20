@@ -72,8 +72,8 @@ Field docs and samples: `https://app.docstar.io/p/automations/llms.txt?collectio
 `https://app.docstar.io/p/app-catalog-and-connections/llms.txt?collectionId=eInXd9-ETenX` (each endpoint links its
 `.openapi.yml`). Fetch raw.
 
-**An empty answer is not proof.** Every `flow.sokt.io/func` call answers HTTP 200: a missing or wrong token gives
-`{ "flows": [] }`, `{ "error": {} }` or `null`, and List Actions sent `service_id` instead of `serviceId` gives
+**An empty answer is not proof.** A `flow.sokt.io/func` call with a missing or wrong token still answers HTTP 200,
+with `{ "flows": [] }`, `{ "error": {} }` or `null`; and List Actions sent `service_id` instead of `serviceId` gives
 `{ "actions": [] }`. Before you conclude there is nothing, run the agent-access check and confirm the id and its key
 spelling came from the right list call (`serviceId` for List Actions, `service_id` for List Triggers). The
 `flow-api.viasocket.com` routes answer `401` to a missing or wrong token.
@@ -107,44 +107,55 @@ Never put the agent token in a step, an `inputData` or a log.
    agent-access.md passed (a missing or wrong token also answers `{ "flows": [] }`),
    List Flows. A flow that already does the job, or a request that is really an edit, goes to that flow (Get Flow,
    then change it); never a second flow for the same automation.
+
+   The plan's yes covers Create Empty Flow, Save Trigger, Save Steps and Run Action's one test run when the plan said
+   what is saved and what the test sends; ask again only for what it did not say. The reads, Options and Sample Event
+   need no confirmation. The real run of the finished flow is the click left in the report.
+
+   Names become ids through Options, never through Run Action Once. With only the builders (no HTTP call), Build
+   Trigger Input and Build Action Input resolve the names from plain words; only when they can't, offer Run Action
+   Once, say exactly what it will do (it runs a real action on their real account), and call it after a yes.
 4. **Connections:** List Connections and match on `service_id` → `auth_id`. Several accounts for one app → ask which.
    None → Create Connection Link with the `service_ids`, give them each `connection_url`, one per message, wait until
    they say they signed in, List Connections again. Don't build on until the `auth_id` is there. Then Create Empty
    Flow once and keep `script_id`.
-5. **The trigger.** An app event: build the trigger's `inputData` from its page (`PICK` keys from Options with the
-   `trigger_id`; a choice left at its default that they did not ask for is wrong), then Sample Event with it: the
-   event it answers is what `context.req.body` holds on each run, so every path a step reads comes from it (a 404:
-   cause one event in the app, then call again). Then Save Trigger with `triggerType: "plugin"`, `trigger_id`,
-   `auth_id` and that `inputData`; it answers the same event as `sampleData` (Get Flow shows it too), the one the
-   flow builder shows for the trigger. A schedule: Save Trigger with `triggerType: "cron"` and `cronStatement` (five-field
-   cron or plain words; unreadable text is refused). A call from their own code, a webhook: Save Trigger with
-   `triggerType: "webhook"` (add `runOncePerItem: true`, and `arrayKey` when the array sits under a key, to run once
-   per item of what the caller posts); the flow then runs on each `POST https://flow.sokt.io/func/<script_id>` and the
-   caller gets the last step's return value (one run per POST). Anyone with that address can run the flow, so the product keeps it on
-   its server and sends a key of its own in a header (`X-Flow-Key`, a long random value in the product's `.env`). A
-   step's return does not stop the steps after it, so a first step only checks the key, and every later step that
-   acts goes on only when it passed:
+5. **The trigger.** One of three kinds; only the fields that kind takes go in Save Trigger.
+   - **An app event:** build the trigger's `inputData` from its page (`PICK` keys from Options with the `trigger_id`;
+     a choice left at its default that they did not ask for is wrong), then Sample Event with it: the event it
+     answers is what `context.req.body` holds on each run, so every path a step reads comes from it (a 404: cause one
+     event in the app, then call again). Then Save Trigger with `triggerType: "plugin"`, `trigger_id`, `auth_id` and
+     that `inputData`; it answers the same event as `sampleData` (Get Flow shows it too), the one the flow builder
+     shows for the trigger.
+   - **A schedule:** Save Trigger with `triggerType: "cron"` and `cronStatement` (five-field cron or plain words;
+     unreadable text is refused).
+   - **A call from their own code, a webhook:** Save Trigger with `triggerType: "webhook"` (add `runOncePerItem: true`,
+     and `arrayKey` when the array sits under a key, to run once per item of what the caller posts); the flow then
+     runs on each `POST https://flow.sokt.io/func/<script_id>` and the caller gets the last step's return value (one
+     run per POST). Anyone with that address can run the flow, so the product keeps it on its server and sends a key
+     of its own in a header (`X-Flow-Key`, a long random value in the product's `.env`). A step's return does not
+     stop the steps after it, so a first step only checks the key, and every later step that acts goes on only when
+     it passed:
 
-   ```js
-   // the first step, named check_key
-   return { ok: context?.req?.headers?.['x-flow-key'] === '<the key>' }
-   // the first line of every later step
-   if (!context?.res?.check_key?.ok) return { skipped: 'refused' }
-   ```
+     ```js
+     // the first step, named check_key
+     return { ok: context?.req?.headers?.['x-flow-key'] === '<the key>' }
+     // the first line of every later step
+     if (!context?.res?.check_key?.ok) return { skipped: 'refused' }
+     ```
 
-   With `runOncePerItem`, the caller gets `Flow Queued` and each item runs on its own, in the history, with the item
-   as `context.req.body` and none of the caller's headers: check the key in the trigger's `transformCode` instead,
-   which runs once on the caller's request and answers the items to run (`arrayKey` is then not needed), and leave
-   the first step out:
+     With `runOncePerItem`, the caller gets `Flow Queued` and each item runs on its own, in the history, with the
+     item as `context.req.body` and none of the caller's headers: check the key in the trigger's `transformCode`
+     instead, which runs once on the caller's request and answers the items to run (`arrayKey` is then not needed),
+     and leave the first step out:
 
-   ```js
-   // Save Trigger, transformCode
-   if (context?.req?.headers?.['x-flow-key'] !== '<the key>') return []
-   return context?.req?.body?.items
-   ```
+     ```js
+     // Save Trigger, transformCode
+     if (context?.req?.headers?.['x-flow-key'] !== '<the key>') return []
+     return context?.req?.body?.items
+     ```
 
-   The values the caller sends are at `context.req.body`; the step reads them by that path, and the test run of its
-   action uses a value of the same shape.
+     The values the caller sends are at `context.req.body`; the step reads them by that path, and the test run of
+     its action uses a value of the same shape.
 
 6. **The steps.** For each app action: build its `inputData` from the action's page (`PICK` keys from Options), then
    Run Action with it once, on something made for the test (a message to themselves, a sheet named "viaSocket
@@ -152,6 +163,7 @@ Never put the agent token in a step, an `inputData` or a log.
    goes into the step's code, with context values interpolated; then Save Steps on that `script_id` with the **whole**
    `steps` array: `stepname`, `code`, `service_action_functions: [{ name, auth_id, action_id }]` (one per action the
    code calls; `name` is what the step code calls, `sendMessage`; `[]` for a step that only decides or transforms).
+   The rules for the code are under "Step code" below.
 7. **Run it once** if they agree (POST the webhook, cause the event, or wait for the schedule), check it ran, and
    tell them the flow is in their viaSocket account (under Automations at https://flow.viasocket.com) and what it
    does.
@@ -176,14 +188,6 @@ history" describes.
 
 **Edit** = Get Flow → change → Save Steps with every step. A step left out is deleted. If Get Flow answers
 `steps: []` for a flow you know has steps, the read failed: do not Save Steps; check the sign-in and read again.
-
-The plan's yes covers Create Empty Flow, Save Trigger, Save Steps and Run Action's one test run when the plan said
-what is saved and what the test sends; ask again only for what it did not say. The reads, Options and Sample Event
-need no confirmation. The real run of the finished flow is the click left in the report.
-
-Names become ids through Options, never through Run Action Once. With only the builders (no HTTP call), Build
-Trigger Input and Build Action Input resolve the names from plain words; only when they can't, offer Run Action
-Once, say exactly what it will do (it runs a real action on their real account), and call it after a yes.
 
 ## Step code
 

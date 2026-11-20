@@ -236,6 +236,18 @@ How it works:
 - One flow serves the product's own server and every user's server, because the code always acts with the caller's
   token.
 
+Limits:
+
+- **25 seconds:** the tool call ends at 30, and the webhook answers only when the run ends, so longer code fails.
+- **Each call is a flow run** in the person's own viaSocket account and counts on its plan.
+- **The code acts as the user:** it can do whatever their token allows and send what it reads anywhere with `fetch`,
+  like any code an AI writes. Offer it only on a server with a login. To keep some endpoints out (admin, key
+  minting), refuse their paths in `api()`.
+- **It is not a hard sandbox:** the code runs in the same JavaScript as the step, so the step holds nothing the user
+  may not have. Each run starts afresh, so one run's code cannot reach the next run's.
+- **The flow's history** keeps each run's input and result, which the members of the person's viaSocket account can
+  open.
+
 ### Build it
 
 1. **The flow**, as my-automations.md builds one: Create Empty Flow,
@@ -358,18 +370,6 @@ What the tool answers:
 | `{ "error": "<message>" }` | the code threw or did not compile; the message says why |
 | `{ "error": "Not signed in: …" }` | the client sent no token, or `ME_URL` refused it |
 | `{ "error": "This flow runs only for its MCP tool." }` | the key is missing or wrong: the call did not come from the tool |
-
-Limits:
-
-- **25 seconds:** the tool call ends at 30, and the webhook answers only when the run ends, so longer code fails.
-- **Each call is a flow run** in the person's own viaSocket account and counts on its plan.
-- **The code acts as the user:** it can do whatever their token allows and send what it reads anywhere with `fetch`,
-  like any code an AI writes. Offer it only on a server with a login. To keep some endpoints out (admin, key
-  minting), refuse their paths in `api()`.
-- **It is not a hard sandbox:** the code runs in the same JavaScript as the step, so the step holds nothing the user
-  may not have. Each run starts afresh, so one run's code cannot reach the next run's.
-- **The flow's history** keeps each run's input and result, which the members of the person's viaSocket account can
-  open.
 
 ## Finished when
 

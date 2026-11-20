@@ -14,9 +14,12 @@ The test user id is the product's own id for whoever connects during the test:
 
 Every test call runs as that id
 (`userId` = the test user id), whichever
-of the two it is; its ids never go into the product's code, and its users connect their own.
+of the two it is. The test user's ids never go into the product's code, and the product's real users connect their own.
 
 ## 1. Through the product's own Connect button
+
+When you can run a command on the machine their browser can reach, start with section 2; otherwise use this section,
+once the product's Connect button exists.
 
 The way the product's users will connect is the way to test, so the Connect button is the first screen to build,
 the command below standing in until it is
@@ -41,8 +44,10 @@ npx -y viasocket-apps connect <app_slug> --user apps-api-test-user --no-open
 It serves a one-button page on `127.0.0.1` that opens viaSocket's Connect popup for that app, prints the page's URL
 (`--no-open`: printed, never opened in their browser by the command),
 and when the sign-in lands it enables the app for that user (or finds it already enabled). Ask them to open the URL it
-prints, click Connect and sign in. It waits up to five minutes: run it in the background when your environment runs
-commands to completion. Only on the machine their browser can reach (a cloud sandbox's `127.0.0.1` is not): otherwise
+prints, click Connect and sign in. It waits up to five minutes (`--timeout <seconds>` changes it) and, when nothing
+arrives, exits 1 and says to run the command again: do that and hand them the URL it prints. Run it in the background
+when your environment runs commands to completion, and read the URL from its output as soon as it appears, without
+waiting for the command to end: the URL is printed first, the result last. Only on the machine their browser can reach (a cloud sandbox's `127.0.0.1` is not): otherwise
 section 1.
 
 ## 3. With the viaSocket connector or the agent token
@@ -55,8 +60,8 @@ still run as its test user, connected through 1 or 2.
 
 ## When the connection is there
 
-1. `listConnections(<test user id>)`: the entry whose `identifier` ends in
-   `_<service_id>` of the app is the connection; that `identifier` is the `auth_id`. Through the product's own button it is
+1. `listConnections(<test user id>)` (the command does not print the `auth_id`): the entry whose `identifier` ends in
+   `_<service_id>` of the app is the connection (`serviceIdFor(<test user id>, <app_slug>)` answers that service id); that `identifier` is the `auth_id`. Through the product's own button it is
    already stored where the product keeps it.
 2. Enable the app for that user and run each action once against a test target. How:
    actions-and-events.md, "The order".
