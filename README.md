@@ -443,11 +443,11 @@ optional fields and open objects. Needs `@openai/agents` 0.1 or later. Python: `
 
 ### Python
 
-The same tools for Python agents (LangChain, CrewAI, LlamaIndex, Google ADK and the OpenAI Agents SDK) are the PyPI package
+The same tools for Python agents (LangChain, CrewAI, LlamaIndex, Google ADK, the OpenAI Agents SDK, Haystack and Pydantic AI) are the PyPI package
 [`viasocket`](https://pypi.org/project/viasocket/), from the same catalog and with the same names:
 
 ```sh
-pip install "viasocket[langchain]"     # or [crewai], [llamaindex], [adk], [openai-agents]
+pip install "viasocket[langchain]"     # or [crewai], [llamaindex], [adk], [openai-agents], [haystack], [pydantic-ai]
 ```
 
 ```python

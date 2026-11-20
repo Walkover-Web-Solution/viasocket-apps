@@ -5,13 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "viasocket"
 dynamic = ["version"]
-description = "viaSocket for Python agents: the 2,300+ apps each of your users connected (Slack, Google Sheets, HubSpot, Notion...) as tools for LangChain, CrewAI and LlamaIndex."
+description = "viaSocket for Python agents: the 2,300+ apps each of your users connected (Slack, Google Sheets, HubSpot, Notion...) as tools for LangChain, CrewAI, LlamaIndex, Google ADK, OpenAI Agents, Haystack and Pydantic AI."
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Walkover Web Solution" }]
 requires-python = ">=3.10"
 dependencies = []
-keywords = ["viasocket", "integrations", "ai-agent", "langchain", "crewai", "llamaindex", "google-adk", "openai-agents", "tools", "slack", "google-sheets"]
+keywords = ["viasocket", "integrations", "ai-agent", "langchain", "crewai", "llamaindex", "google-adk", "openai-agents", "haystack", "pydantic-ai", "tools", "slack", "google-sheets"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: OS Independent",
@@ -23,6 +23,8 @@ crewai = ["crewai>=0.80"]
 llamaindex = ["llama-index-core>=0.12"]
 adk = ["google-adk>=1.10"]
 openai-agents = ["openai-agents>=0.1"]
+haystack = ["haystack-ai>=2.14"]
+pydantic-ai = ["pydantic-ai-slim>=1.0"]
 
 [project.urls]
 Homepage = "https://github.com/Walkover-Web-Solution/viasocket-apps/tree/main/python#readme"
