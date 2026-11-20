@@ -576,7 +576,7 @@ The screens, the callback and the setup are in
 | `viasocket.catalog.serviceIdFor(slug)` | The `service_id` of the app with this slug (`slack`, `google-sheets`). Exact and case-sensitive; an unknown slug throws. Cached. No token. |
 | `viasocket.catalog.versionIdFor(serviceId, event, version?)` | Deprecated: name actions by key with `user.listActions` instead. The version id the id-based routes take, for one event. |
 | `viasocket.catalog.listBuiltIn()` | The built-in plugs (Run AI Model, Pause Workflow, Memory, scraping, GST…): every plug tagged `SDK`, with its actions and whether it needs a sign-in. No token. |
-| `viasocket.sampleEvent(triggerId, authId, authType, inputData?)` | One real event of a trigger for one connection: what a handler reads at `context.req.body`. Takes the `trigger_id`; `authType` is `service.auth_type`. Map from this, never from `sample_output`. |
+| `viasocket.sampleEvent(triggerId, authId, authType?, inputData?)` | One real event of a trigger for one connection: what a handler reads at `context.req.body`. Takes the `trigger_id`; `authType` (`service.auth_type`) may be left out. Map from this, never from `sample_output`. |
 | `user.subscribe(app, trigger, { authId, inputData, version, code \| webhook, meta })` | Subscribe to an app event, by the app's slug and the trigger's key, with a handler we run per event. Returns `{ scriptId, hookUrl, … }`. The id-based form `subscribe(triggerVersionId, params)` still works. |
 | `user.updateSubscription(scriptId, { code, meta })` | Change a live subscription in place. |
 | `user.createFlow({ title, description })` | An empty automation for this user; answers its `scriptId`. One flow per automation: create it once, send every change to it. |
@@ -588,7 +588,7 @@ The screens, the callback and the setup are in
 | `user.setFlowStatus(scriptId, n)` | Pause (`2`), resume or restore (`1`), or delete (`0`) one flow. Setting the state it is already in succeeds. |
 | `user.disableFlow(scriptId)` / `user.enableFlow(scriptId)` / `user.deleteFlow(scriptId)` | Pause, resume, delete. |
 | `user.renameFlow(scriptId, { title, description, meta })` | Rename a flow; `meta` comes back as `metadata` in the prebuilt UI's events. |
-| `user.listConnections()` | Every app this user has connected; `isExpired: true` means reconnect it in place with `connect({ authId })`. |
+| `user.listConnections()` | Every app this user has connected: `identifier` is the `auth_id` (no `id` key), with `service_id`, `service_name`, `connection_label` and `isExpired`; `isExpired: true` means reconnect it in place with `connect({ authId })`. |
 | `user.revokeConnection(authId)` | Disconnect an app. Pause its flows first. |
 | `user.ai.send({ message, threadId, prompt, tools, mcpServers, attachments, responseType, delivery })` | One message to the assistant we run for this user. Returns `{ threadId, messageId, content, finishReason }`, or `{ threadId, messageId, channel }` with `delivery: 'rtlayer'`. |
 | `user.ai.threads()` / `user.ai.history(threadId, { page })` | This user's threads, newest first (`title` is `null` until the AI writes it); one thread's messages, 40 exchanges a page. |

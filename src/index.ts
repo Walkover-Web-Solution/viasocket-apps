@@ -49,6 +49,7 @@ export type {
   AiTool,
   AppAction,
   AppActions,
+  Connection,
   AutomationFlow,
   AutomationRun,
   AutomationStep,

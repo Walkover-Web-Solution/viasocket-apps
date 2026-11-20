@@ -26,6 +26,7 @@ import type {
   AiThread,
   AppAction,
   AppActions,
+  Connection,
   BuiltInApp,
   CatalogAction,
   CatalogApp,
@@ -390,20 +391,21 @@ export class ViaSocket {
    * One real event of a trigger for one connection: exactly what a handler reads at
    * `context.req.body`, and what an automation's steps read there. Map from it, never from the
    * catalog's `sample_output`, which the connector's author recorded on another account. It takes
-   * the `trigger_id` (a version id answers "No response"); `authType` is the app's
-   * `service.auth_type` from `catalog.versions()`; `inputData` is the trigger's own settings, the
-   * same the subscription will carry. No token, but the `auth_id` is a credential: server only.
+   * the `trigger_id` (a version id answers "No response"); `authType`, the app's
+   * `service.auth_type` from `catalog.versions()`, is accepted but not needed (the trigger's version
+   * carries its own), so it may be left out; `inputData` is the trigger's own settings, the same the
+   * subscription will carry. No token, but the `auth_id` is a credential: server only.
    */
   async sampleEvent<T = Record<string, unknown>>(
     triggerId: string,
     authId: string,
-    authType: string,
+    authType?: string,
     inputData: Record<string, unknown> = {}
   ): Promise<T> {
     const query = new URLSearchParams({
       action_id: required('triggerId', triggerId),
       auth_id: required('authId', authId),
-      authType: required('authType', authType)
+      ...(authType ? { authType } : {})
     })
     const { data } = await request<Record<string, unknown>>({
       method: 'POST',
@@ -1059,12 +1061,13 @@ export class UserScope {
   }
 
   /**
-   * Every app this user has connected. Returned as the API sends it: the shape of each entry
-   * is not yet documented, so nothing is mapped or dropped here.
+   * Every app this user has connected, as the API sends each entry: `identifier` is the `auth_id`
+   * (there is no `id` key), with the app's `service_id` and `service_name`, the `connection_label`
+   * and `isExpired`. Nothing is mapped or dropped.
    */
-  async listConnections(): Promise<unknown[]> {
+  async listConnections(): Promise<Connection[]> {
     const { data } = await this.call<unknown>('GET', '/embed/authentications')
-    return Array.isArray(data) ? data : []
+    return Array.isArray(data) ? (data as Connection[]) : []
   }
 
   /** Disconnects an app. Disable the flows built on it first, or they stop working. */

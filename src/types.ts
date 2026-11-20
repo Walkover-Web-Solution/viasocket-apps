@@ -586,3 +586,15 @@ export interface MemoryToken {
   /** Every space the token reaches and its access, the user's own included. */
   spaces: Record<string, MemoryAccess>
 }
+
+/** One connected app of a user, as `GET /embed/authentications` answers it (`user.listConnections()`). */
+export interface Connection {
+  /** The `auth_id`: what `enable`, `subscribe`, `listOptions` and `connect({ authId })` take. There is no `id` key. */
+  identifier: string
+  service_id: string
+  service_name: string
+  connection_label: string
+  /** `true` once the app's token can no longer be refreshed: reconnect in place with `connect({ authId })`. */
+  isExpired: boolean
+  [key: string]: unknown
+}
