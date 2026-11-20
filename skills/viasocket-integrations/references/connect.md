@@ -45,7 +45,7 @@ It shows the app's icon and name.
   button.onclick = () =>
     openViasocketConnection(token, serviceIds['<app_slug>'], {
       filteredActions: ['<action_id or trigger_id>'], // consent asks only these actions' and triggers' scopes: action_id in listActions
-      skipActionSelection: true,
+      skipActionSelection: true, // with the actions named above, or an authId: straight to the app's sign-in and consent screen; alone it changes nothing
       onSuccess: ({ data }) => save(data.id), // also for a success that lands after the popup was reported closed
       onError: ({ error }) => showError(error?.message)
       // authId: '<auth_id>' reconnects an expired connection in place
@@ -69,6 +69,9 @@ The rule and the code: actions-and-events.md, "Once, or per run".
 
 - Only `openViasocketConnection` opens the popup: a hand-built
   viasocket URL, `window.open` or an iframe shows "Page not found".
+- The browser's token lives an hour (`expiresIn: '1h'`), and the page may stay open longer: a click after that hour
+  ends with `status: 'error'` ("Embed token could not be verified"). Fetch the token again before the hour ends (a
+  timer, or when the tab becomes visible again), or sign the browser's token for as long as a page stays open.
 - An expired connection (`isExpired: true` in the user's connections) is reconnected in place with its `authId`,
   so nothing stored against it changes.
 - One user's `auth_id` never serves another user. If the product's end users serve customers of their own, the end

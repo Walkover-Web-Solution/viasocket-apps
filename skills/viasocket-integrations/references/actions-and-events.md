@@ -63,7 +63,7 @@ that the signed-in user owns the `script_id` it is about to use; a request namin
 const slug = '<app_slug>'
 
 // run an action (enable once per user and connection)
-const scriptId = (await findEnabledApp(userId, slug)) || (await enableApp(userId, slug, authId))
+const scriptId = (await findEnabledApp(userId, slug, authId)) || (await enableApp(userId, slug, authId)) // authId: this connection's flow, for a user with two connections to one app
 const { options } = await listOptions(userId, slug, '<action_key>', { fieldKey: '<dotted.key>', authId, existingFields }) // per PICK key
 const result = await runAction(scriptId, '<action_key>', actionInput, { version: '<version>' })
 

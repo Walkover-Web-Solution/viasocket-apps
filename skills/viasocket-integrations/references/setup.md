@@ -18,7 +18,9 @@ If all three are already there (the prompt or the person you work for put them),
 
 ## One command, one click
 
-Run it in the project folder (Node.js 20+, nothing to install):
+Only on the machine their browser can reach: in a cloud sandbox the link it prints comes back to that sandbox's
+`127.0.0.1` and never completes, so take the next section that fits instead. Run it in the project folder (Node.js
+20+, nothing to install):
 
 ```bash
 npx -y viasocket-apps setup --no-open
@@ -45,8 +47,6 @@ It changes no billing, no limits and no settings of an existing project.
 - Always `--no-open`: without it the command opens a tab in their browser by itself, and people lose the chat. Run it
   in the background when your environment runs commands to completion, and read its output once it exits: the line
   naming the workspace, the project and the file. It never prints a secret; never open `.env` to check.
-- The link works only when their browser can reach `127.0.0.1` of the machine running the command (a local agent,
-  not a cloud sandbox): if it can't, take the next section that fits.
 - **Exit 3** means the workspace has several embeds and it printed them: show them the list, ask which one is this
   product's, and run it again with `--project <id>`, or with `--new` when none is.
 - **Exit 1** means the sign-in did not arrive or a call failed: run it again and hand the link it prints (a link from
@@ -67,7 +67,7 @@ The connector carries their sign-in, so it finds the two ids itself; only the se
 > into <the exact place>. Tell me when done.
 
 `<the exact place>` is the project's `.env` or the builder's secret settings, named the way they see them. The page
-copies all three lines; the two ids in it are the ones you found.
+copies all three lines; the two ids in it are the ones you found. If it went into `.env`, keep each key once there.
 
 Put the two ids where the product keeps its environment yourself, under the names above.
 
@@ -105,11 +105,21 @@ that plain `node` cannot import: make the same call from a script or route the p
 
 A list (empty until someone connects) means setup is right; a 401 means the secret or the ids are wrong.
 
-A call failing with `host_not_allowed` means a blocked host: ask once to allow `viasocket.com`, `registry.npmjs.org`,
-`flow.viasocket.com`, `flow-api.viasocket.com`, `flow.sokt.io`, `plug-service.viasocket.com`, `connect.viasocket.com`,
-`36blocks.com`, `routes.msg91.com`, `proxy.msg91.com` (login and organisations),
-`mcp.viasocket.com`, `memory-api.viasocket.com` and `app.docstar.io`; until then, ask them to run each request and
-paste the response.
+A call failing with `host_not_allowed` means a blocked host: ask once to allow these, then carry on; until then,
+ask them to run each request and paste the response.
+
+- `viasocket.com`
+- `registry.npmjs.org`
+- `flow.viasocket.com`
+- `flow-api.viasocket.com`
+- `flow.sokt.io`
+- `plug-service.viasocket.com`
+- `connect.viasocket.com`
+- `36blocks.com`, `routes.msg91.com` and `proxy.msg91.com` (login and organisations)
+- `mcp.viasocket.com`
+- `memory-api.viasocket.com`
+- `app.docstar.io`
+
 Only `searchApps`, `listApps` and `listEvents` use `plug-service.viasocket.com`: while it is blocked, every app's
 page gives its slug and its `service_id`, so the rest can be tested.
 
