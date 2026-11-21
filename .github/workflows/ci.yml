@@ -40,6 +40,8 @@ jobs:
             extras: '[adk]'
           - python: '3.12'
             extras: '[openai-agents]'
+          - python: '3.12'
+            extras: '[haystack,pydantic-ai]'
     defaults:
       run:
         working-directory: python

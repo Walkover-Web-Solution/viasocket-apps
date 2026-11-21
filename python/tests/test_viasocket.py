@@ -332,6 +332,43 @@ def test_adk_tools():
     assert run_body(calls)["inputData"] == INPUT
 
 
+def test_haystack_tools():
+    pytest.importorskip("haystack")
+    from viasocket.haystack import viasocket_toolset
+
+    viasocket, calls = make_client([ENABLED_SLACK])
+    toolset = viasocket_toolset(viasocket, "user_123", ["slack"])
+    send = next(iter(toolset))
+    assert send.name == "slack_send-message"
+    assert send.parameters["required"] == ["text"]
+    assert send.invoke(**INPUT) == '{"ok": true}'
+    assert run_body(calls)["inputData"] == INPUT
+
+
+def test_pydantic_ai_tools():
+    pytest.importorskip("pydantic_ai")
+    from pydantic_ai import Agent
+    from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
+    from pydantic_ai.models.function import FunctionModel
+
+    from viasocket.pydantic_ai import viasocket_toolset
+
+    viasocket, calls = make_client([ENABLED_SLACK])
+    seen = {}
+
+    # A stand-in model: it calls the tool with INPUT, then answers with what the tool returned.
+    def model(messages, info):
+        seen["schema"] = info.function_tools[0].parameters_json_schema
+        if len(messages) == 1:
+            return ModelResponse(parts=[ToolCallPart("slack_send-message", INPUT)])
+        return ModelResponse(parts=[TextPart(messages[-1].parts[0].content)])
+
+    agent = Agent(FunctionModel(model), toolsets=[viasocket_toolset(viasocket, "user_123", ["slack"])])
+    assert agent.run_sync("post it").output == '{"ok": true}'
+    assert seen["schema"]["required"] == ["text"]
+    assert run_body(calls)["inputData"] == INPUT
+
+
 def test_crewai_tools():
     pytest.importorskip("crewai")
     from viasocket.crewai import viasocket_tools

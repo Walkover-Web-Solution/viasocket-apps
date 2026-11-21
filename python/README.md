@@ -3,13 +3,13 @@
 Your own agent, acting in the apps each of your users connected through viaSocket: every action of
 an app is a tool, run on that user's own connection. Slack's Send Message, Google Sheets' Add New
 Row, HubSpot's Create Deal — any of 2,300+ apps, with no connector code and no OAuth on your side.
-Works with LangChain, CrewAI, LlamaIndex, Google ADK and the OpenAI Agents SDK.
+Works with LangChain, CrewAI, LlamaIndex, Google ADK, the OpenAI Agents SDK, Haystack and Pydantic AI.
 
 It is the Python side of the [`viasocket-apps`](https://www.npmjs.com/package/viasocket-apps) npm
 package, and builds the same tools from the same catalog. No dependencies of its own; Python 3.10+.
 
 ```sh
-pip install "viasocket[langchain]"     # pick your framework: [langchain], [crewai], [llamaindex], [adk] or [openai-agents]
+pip install "viasocket[langchain]"     # pick your framework: [langchain], [crewai], [llamaindex], [adk], [openai-agents], [haystack] or [pydantic-ai]
 ```
 
 The part in brackets installs that framework with the package. Plain `pip install viasocket` is enough when the
@@ -119,6 +119,41 @@ result = Runner.run_sync(agent, "Post our Q3 numbers in #finance")
 ```
 
 The tools are function tools with the action's JSON Schema, not strict (an action's form has optional fields), and
+each call runs off the event loop.
+
+## Haystack
+
+```python
+from haystack.components.agents import Agent
+from haystack.components.generators.chat import OpenAIChatGenerator
+from haystack.dataclasses import ChatMessage
+from viasocket.haystack import viasocket_toolset
+
+agent = Agent(
+    chat_generator=OpenAIChatGenerator(model="gpt-4.1-mini"),
+    system_prompt="Keep the team updated in Slack.",
+    tools=viasocket_toolset(viasocket, user="user_123", apps=["slack"], actions={"slack": ["send-message"]}),
+)
+result = agent.run(messages=[ChatMessage.from_user("Post our Q3 numbers in #finance")])
+```
+
+Each tool is a Haystack `Tool` with the action's JSON Schema; `viasocket_tools` gives the same tools as a list.
+
+## Pydantic AI
+
+```python
+from pydantic_ai import Agent
+from viasocket.pydantic_ai import viasocket_toolset
+
+agent = Agent(
+    "openai:gpt-4.1-mini",
+    instructions="Keep the team updated in Slack.",
+    toolsets=[viasocket_toolset(viasocket, user="user_123", apps=["slack"], actions={"slack": ["send-message"]})],
+)
+result = agent.run_sync("Post our Q3 numbers in #finance")
+```
+
+The toolset holds one tool per action with the action's JSON Schema, which Pydantic AI checks the arguments against;
 each call runs off the event loop.
 
 ## How the tools behave
