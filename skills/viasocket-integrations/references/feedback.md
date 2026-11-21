@@ -5,6 +5,19 @@ Back to the skill: https://viasocket.com/docs/skill.md
 A problem that reaches viaSocket gets fixed for everyone who uses it; one that stays in a chat is lost. Report it,
 then carry on with the work.
 
+## When a call fails
+
+The answer says why, and the page that made the call says what to do. The rules that hold everywhere:
+
+- a 401, or an empty list from a call that needs a sign-in: the sign-in lapsed. Run the page's check and sign in
+  again; never build on the empty answer.
+- a 404 on an app or an event: search the catalog again by name; still nothing: a `missing_capability` report.
+- a 400 naming a field: read the event's page and its Options again.
+- a connection with `isExpired: true`: reconnect it in place (connect.md).
+- a 403: another user's or account's thing. Stop.
+- a 429 or a 5xx: retry a read once after a pause; never retry a write that may have sent or saved.
+- anything else: stop, report it as this page says, and tell the person in plain words.
+
 ## When to report
 
 Only when one of these happens (never to report success):
