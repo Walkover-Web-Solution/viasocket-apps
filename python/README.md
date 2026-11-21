@@ -130,7 +130,7 @@ from haystack.dataclasses import ChatMessage
 from viasocket.haystack import viasocket_toolset
 
 agent = Agent(
-    chat_generator=OpenAIChatGenerator(model="gpt-4.1-mini"),
+    chat_generator=OpenAIChatGenerator(model="gpt-6-luna"),
     system_prompt="Keep the team updated in Slack.",
     tools=viasocket_toolset(viasocket, user="user_123", apps=["slack"], actions={"slack": ["send-message"]}),
 )
@@ -146,7 +146,7 @@ from pydantic_ai import Agent
 from viasocket.pydantic_ai import viasocket_toolset
 
 agent = Agent(
-    "openai:gpt-4.1-mini",
+    "openai:gpt-6-luna",
     instructions="Keep the team updated in Slack.",
     toolsets=[viasocket_toolset(viasocket, user="user_123", apps=["slack"], actions={"slack": ["send-message"]})],
 )

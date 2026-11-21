@@ -6,7 +6,7 @@ viasocket.pydantic_ai — the apps a user connected, as Pydantic AI tools.
     from viasocket.pydantic_ai import viasocket_toolset
 
     toolset = viasocket_toolset(viasocket, user="user_123", apps=["slack"], actions={"slack": ["send-message"]})
-    agent = Agent("openai:gpt-4.1-mini", toolsets=[toolset])
+    agent = Agent("openai:gpt-6-luna", toolsets=[toolset])
 
 Needs `pydantic-ai-slim` 1.0 or later: `pip install "viasocket[pydantic-ai]"`.
 """

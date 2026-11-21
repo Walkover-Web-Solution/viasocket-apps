@@ -7,7 +7,7 @@ viasocket.haystack — the apps a user connected, as Haystack tools.
     from viasocket.haystack import viasocket_toolset
 
     tools = viasocket_toolset(viasocket, user="user_123", apps=["slack"], actions={"slack": ["send-message"]})
-    agent = Agent(chat_generator=OpenAIChatGenerator(model="gpt-4.1-mini"), tools=tools)
+    agent = Agent(chat_generator=OpenAIChatGenerator(model="gpt-6-luna"), tools=tools)
 
 Needs `haystack-ai` 2.14 or later: `pip install "viasocket[haystack]"`.
 """
