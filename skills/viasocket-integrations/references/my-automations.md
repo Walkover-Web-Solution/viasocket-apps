@@ -12,7 +12,7 @@ https://flow.viasocket.com.
 
 This page does two things:
 
-- **One action, once** (Run Action Once): it runs now on their account, and the work ends there. Read "The calls",
+- **One action, once** (Run Action): it runs now on their account, and the work ends there. Read "The calls",
   then "One action now".
 - **A workflow**, which the calls name a flow: one trigger (an app's event, a schedule, or a web address their own
   code calls) and ordered JavaScript steps that call actions in their apps. viaSocket runs it and keeps its history.
@@ -28,10 +28,10 @@ call does.
 
 ## The calls
 
-Sixteen calls, each with `Content-Type: application/json`, the JSON body shown, and
+Fifteen calls, each with `Content-Type: application/json`, the JSON body shown, and
 `Authorization: <VIASOCKET_AGENT_TOKEN>` (through the MCP: `call_any_api_of_viasocket` for a POST,
 `call_any_read_api_of_viasocket` for a GET, `Authorization` empty; a server whose own tools are `create_empty_flow`,
-`save_trigger`, `save_steps` and `get_flow_by_id` uses those for the four flow calls). Nine are `POST https://flow.sokt.io/func/<id>`
+`save_trigger`, `save_steps` and `get_flow_by_id` uses those for the four flow calls). Eight are `POST https://flow.sokt.io/func/<id>`
 and answer HTTP 200 even when refused: the refusal is in the body (`success: false`, or `error`). The seven that
 build and test a flow are routes on `flow-api.viasocket.com` and answer real statuses: 400 names the field, 401 is a
 missing or wrong token, 403 another user's flow or connection, 404 an id that names nothing. Reads change nothing;
@@ -54,16 +54,17 @@ writes need their yes.
 | Create Empty Flow | `POST https://flow-api.viasocket.com/automations` | `{ "title": "<title>", "description": "<one line>" }` | **write** | `script_id` |
 | Save Trigger | `POST https://flow-api.viasocket.com/automations/<script_id>/trigger` | `{ "triggerType": "plugin" \| "cron" \| "webhook", "trigger_id": "<trigger_id>", "auth_id": "<auth_id>", "inputData": {}, "cronStatement": "<cron>", "timezone": "<zone, optional>", "runOncePerItem": true, "arrayKey": "<key>" }` (only the fields the trigger type takes) | **write**, replaces the trigger | the saved trigger |
 | Save Steps | `POST https://flow-api.viasocket.com/automations/<script_id>/steps` | `{ "steps": [{ "stepname": "<name>", "code": "<js>", "service_action_functions": [{ "name": "<what the code calls>", "auth_id": "<auth_id, or NoAuth for an app without sign-in>", "action_id": "<action_id>" }] }] }` | **write**, replaces all steps and publishes | the flow, as Get Flow answers it |
-| Run Action Once | `scri5SwnfYyK` | `{ "service_id": "<service_id>", "action_id": "<action_id>", "auth_id": "<auth_id>", "instructions": "<plain words>", "thread_id": "<your id>" }` | **runs a real action** | the action's result |
 
 **The fields of an event** are on its page, `https://viasocket.com/docs/<service_id>/<event>.md` (the app's slug
 works too): its `inputData` as a type, each key the person chooses from a list marked `PICK`; `.details.md` adds the
 labels, the fixed choices and a sample; `https://viasocket.com/docs/<service_id>.md?search=<words>` finds the event.
 `action_id` and `trigger_id` are the ids List Actions, List Triggers and that page give, never a version id. Options,
-Run Action and Sample Event are how an `inputData` is built and proven here; the three builders below do that work
-through an AI, from plain words, and are for a client whose only viaSocket tools are `build_trigger_input`,
-`build_action_input` and `run_action_once` (no `call_any_api_of_viasocket`, no HTTP call): slower, and Build Action
-Input runs the action once for real with the text it guesses, so it needs the same yes as Run Action.
+Run Action and Sample Event are how an `inputData` is built and proven here; the two builders do that work through
+an AI, from plain words, and are for a client whose only viaSocket tools are `build_trigger_input` and
+`build_action_input` (no `call_any_api_of_viasocket`, no HTTP call): slower, and Build Action Input runs the action
+once for real with the text it guesses, so it needs the same yes as Run Action. For that client it is also how one
+action is done once. A `run_action_once` tool a server still shows is not called: it runs an AI inside a flow with
+the 58-second limit and does not answer in time.
 
 `thread_id`: one id you make per trigger or step (`slack-send-message-sales`), reused for later changes to the same
 step, so the builder keeps its context.
@@ -94,7 +95,8 @@ Never put the agent token in a step, an `inputData` or a log.
    there.
 4. **Build the `inputData`** from the action's page: each `PICK` key from Options (match its label to what they said;
    several match, or none → ask), the rest from their words, every key decided on purpose. Then **Run Action** with
-   it. Tell them what happened, from what the app answered.
+   it. Tell them what happened, from what the app answered. With only the builders (no HTTP call): Build Action
+   Input with their words, after the yes, is the run, and its answer is what the app did.
 
 ## Building a workflow
 
@@ -112,9 +114,9 @@ Never put the agent token in a step, an `inputData` or a log.
    what is saved and what the test sends; ask again only for what it did not say. The reads, Options and Sample Event
    need no confirmation. The real run of the finished flow is the click left in the report.
 
-   Names become ids through Options, never through Run Action Once. With only the builders (no HTTP call), Build
-   Trigger Input and Build Action Input resolve the names from plain words; only when they can't, offer Run Action
-   Once, say exactly what it will do (it runs a real action on their real account), and call it after a yes.
+   Names become ids through Options. With only the builders (no HTTP call), Build Trigger Input and Build Action
+   Input resolve the names from plain words; when they can't, ask the person for the id (the app's own screen shows
+   it) instead of guessing.
 4. **Connections:** List Connections and match on `service_id` → `auth_id`. Several accounts for one app → ask which.
    None → Create Connection Link with the `service_ids`, give them each `connection_url`, one per message, wait until
    they say they signed in, List Connections again. Don't build on until the `auth_id` is there. Then Create Empty

@@ -20,7 +20,7 @@ compatibility: >-
   proxy.msg91.com; plug work also app.docstar.io (the Developer Hub API reference). Any language; the viasocket-apps package runs on Node 20+, Bun, Deno and edge runtimes.
 metadata:
   author: viaSocket
-  version: '2026-11-23.1'
+  version: '2026-11-23.2'
 ---
 
 # viaSocket
@@ -176,6 +176,6 @@ which carries the detail the pages above refer to ("Plan, then a yes", "Sign in"
 5. **The report.** Three plain lines first: what works now, what is not tested, the one thing left for them with a
    link; then the details, one line each.
 
-Skill version `2026-11-23.1`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
+Skill version `2026-11-23.2`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
 
 END OF PAGE
