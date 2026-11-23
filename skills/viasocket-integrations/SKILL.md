@@ -20,7 +20,7 @@ compatibility: >-
   proxy.msg91.com; plug work also app.docstar.io (the Developer Hub API reference). Any language; the viasocket-apps package runs on Node 20+, Bun, Deno and edge runtimes.
 metadata:
   author: viaSocket
-  version: '2026-11-21.3'
+  version: '2026-11-23.1'
 ---
 
 # viaSocket
@@ -94,7 +94,7 @@ conversation plus the Memory row for what it knows about them across conversatio
 
 | what you get | for | page |
 | --- | --- | --- |
-| **An assistant, or AI behind a feature**: threads with history, JSON answers, a model per call with its price and tested quality, the product's own provider key if it wants one. | a product | https://viasocket.com/docs/ai.md |
+| **An assistant, or AI behind a feature**: threads with history, JSON answers, a model per call with its price and tested quality; on viaSocket's model accounts, the product's own provider key, or each user's own Claude account (the Claude Connector app). | a product | https://viasocket.com/docs/ai.md |
 | **What that AI can use**: the product's API, MCP servers and the user's apps as tools; images, video, audio, PDFs and documents the user attaches; web search and a browser it drives; answers live over a websocket or POSTed to a webhook. | a product | https://viasocket.com/docs/ai.md, sections 2 and 3 |
 | **Flows as tools**: each flow a user builds becomes a tool for the product's AI agent, as OpenAI and MCP tool JSON, with no tool registry to build. | a product | https://viasocket.com/docs/embed.md, its `chatbot` section |
 | **AI as a step of a workflow**: Run AI Model; the same in the background at a lower price; Decision Maker (yes/no, a choice, a score, with confidence); images, transcription, translation; which action for which job. | both | references/ai-steps.md |
@@ -176,6 +176,6 @@ which carries the detail the pages above refer to ("Plan, then a yes", "Sign in"
 5. **The report.** Three plain lines first: what works now, what is not tested, the one thing left for them with a
    link; then the details, one line each.
 
-Skill version `2026-11-21.3`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
+Skill version `2026-11-23.1`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
 
 END OF PAGE
