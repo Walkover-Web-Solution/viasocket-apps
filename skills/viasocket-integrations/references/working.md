@@ -4,7 +4,7 @@ Back to the skill: https://viasocket.com/docs/skill.md
 
 Contents: 1. The page; 2. Plan, then a yes; 3. Sign in; 4. Build and test; 5. The report
 
-The skill's last section names these five steps in a line each; this page carries each in full, with the reason
+The skill's "How to work" section names these five steps in a line each; this page carries each in full, with the reason
 behind every rule, because an agent that knows the reason applies the rule to the case the page did not foresee.
 Every feature page assumes this order.
 
