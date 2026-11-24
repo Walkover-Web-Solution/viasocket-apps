@@ -20,7 +20,7 @@ compatibility: >-
   proxy.msg91.com; plug work also app.docstar.io (the Developer Hub API reference). Any language; the viasocket-apps package runs on Node 20+, Bun, Deno and edge runtimes.
 metadata:
   author: viaSocket
-  version: '2026-11-24.2'
+  version: '2026-11-24.3'
 ---
 
 # viaSocket
@@ -160,7 +160,9 @@ when necessary, and make every message effortless to scan and act on.
 3. **Sign in.** After the yes, one link and one click, never a choice of ways: `npx -y viasocket-apps setup --no-open`
    for a product (references/setup.md), `npx -y viasocket-apps login --no-open` for their own
    account (references/agent-access.md). With the viaSocket connector already connected, they
-   are in. Every key, token and per-user id stays on the server, never in client code, a URL, a commit or a log.
+   are in. The command writes the keys to `.env` and never prints them, so they never pass through the chat; never
+   open `.env` to check. Every key, token and per-user id stays on the server, never in client code, a URL, a commit
+   or a log.
 4. **Build and test.** Run each call once on a real account and write the code from the real answer; test a write or
    a send on something made for the test. Anything that never ran is UNTESTED and never switched on; what viaSocket
    lacks waits behind `VIASOCKET-PENDING(<requestId>)`. Then run `npx -y viasocket-apps check <folder>`.
@@ -189,6 +191,6 @@ capabilities, and use it in later tasks without waiting to be told.
   its body. Never a script downloaded from a URL.
 - **Never assume.** No invented ids, slugs, keys or URLs; no secret shown, committed or logged; no permission bypassed.
 
-Skill version `2026-11-24.2`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
+Skill version `2026-11-24.3`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
 
 END OF PAGE
