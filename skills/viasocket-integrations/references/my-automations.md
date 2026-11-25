@@ -1,29 +1,29 @@
-# In their own apps: one action now, or a workflow
+# The product's own automations: one action now, or a workflow
 
 Part of the viaSocket skill: https://viasocket.com/docs/skill.md.
 
 Contents: The calls; One action now; Building a workflow; Step code; Finished when
 
-The person you work for wants something done in their own apps: a message in their Slack now, a row in their sheet,
-or a workflow that does it for them every morning, on every new lead, or whenever their own code calls. viaSocket
-does it on their own account, through the apps they have connected: the sign-in to each app, the tokens and each
-app's quirks are already handled, and every run is kept in their history, under Automations at
-https://flow.viasocket.com.
+The product itself needs something done in an app: a message in the team's Slack now, a row in a sheet, or a
+workflow that does it every morning, on every new lead, or whenever the product's own code calls. These automations
+belong to the product, not to one of its end users: they run in the developer's viaSocket workspace, through the
+apps the developer connected there, and every run is kept under Automations at https://flow.viasocket.com. The
+sign-in to each app, the tokens and each app's quirks are already handled.
 
 This page does two things:
 
-- **One action, once** (Run Action): it runs now on their account, and the work ends there. Read "The calls",
+- **One action, once** (Run Action): it runs now, in the product's workspace, and the work ends there. Read "The calls",
   then "One action now".
 - **A workflow**, which the calls name a flow: one trigger (an app's event, a schedule, or a web address their own
   code calls) and ordered JavaScript steps that call actions in their apps. viaSocket runs it and keeps its history.
   Read "The calls", then "Building a workflow".
 
-Automations a product runs for each of its users are not this page: that is
-https://viasocket.com/docs/automations.md. Here there is no product: the person is the user, and the work lives in
-their own account.
+An automation the product runs for each of its end users, on that user's own connections, is
+https://viasocket.com/docs/automations.md; end users building their own is https://viasocket.com/docs/embed.md. The
+two never share a connection: the developer's connections serve the product, never an end user.
 
-After the plan's yes, their account is signed in as the skill's "Sign in" says, and the check of
-agent-access.md passes. The three catalog reads below need no sign-in; every other
+After the plan's yes, the skill's "Sign in" (the setup command) has written `VIASOCKET_AGENT_TOKEN` to `.env`;
+how the calls carry it, and the check that it works: agent-access.md. The three catalog reads below need no sign-in; every other
 call does.
 
 ## The calls
@@ -58,7 +58,7 @@ writes need their yes.
 **The fields of an event** are on its page, `https://viasocket.com/docs/<service_id>/<event>.md` (the app's slug
 works too): its `inputData` as a type, each key the person chooses from a list marked `PICK`; `.details.md` adds the
 labels, the fixed choices and a sample; `https://viasocket.com/docs/<service_id>.md?search=<words>` finds the event.
-`action_id` and `trigger_id` are the ids List Actions, List Triggers and that page give, never a version id. Options,
+`action_id` and `trigger_id` are the ids List Actions, List Triggers and that page give, never a version id (the key-and-version names on the Apps API pages belong to those calls, not these). Options,
 Run Action and Sample Event are how an `inputData` is built and proven here; the two builders do that work through
 an AI, from plain words, and are for a client whose only viaSocket tools are `build_trigger_input` and
 `build_action_input` (no `call_any_api_of_viasocket`, no HTTP call): slower, and Build Action Input runs the action
@@ -83,13 +83,15 @@ Never put the agent token in a step, an `inputData` or a log.
 
 ## One action now
 
-"Post this in my Slack", "add this to my sheet": one action, run once, on their own account.
+"Post this in the team Slack", "add this row to the sheet": one action, run once, from the product.
 
 1. **The app and the action:** Search Services with the app's name → `service_id`; List Actions → `action_id`. No
    match → report `kind: missing_capability`, `source: plug`, `refs.app`, and tell them.
 2. **Say exactly what it will do, and wait for their yes.** Run Action runs a real action on their real account:
    it sends the message, it adds the row.
-3. **Their connection,** after the yes and the sign-in: List Connections and match on `service_id` → `auth_id`.
+3. **The connection,** after the yes and the sign-in. Connections made here live in the developer's workspace (the
+   org the sign-in check answers), beside the product's project, and never serve an end user. List Connections and
+   match on `service_id` → `auth_id`.
    Several accounts for one app → ask which. None → Create Connection Link with the `service_ids`, give them the
    `connection_url`, wait until they say they signed in, List Connections again. Nothing runs until the `auth_id` is
    there.

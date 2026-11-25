@@ -1,20 +1,20 @@
-# Signing in to their own account
+# The developer's token
 
 Back to the skill: https://viasocket.com/docs/skill.md
 
-Contents: 1. The viaSocket MCP server, already signed in; 2. The login command, when you can run a command on the machine where their browser is; 3. A token they paste, for every other agent; Using the token (ways 2 and 3); Rules for the token; Which workspace
+Contents: 1. The viaSocket MCP server, already signed in; 2. The setup command, when you can run a command on the machine where their browser is; 3. A token they paste, for every other agent; Using the token (ways 2 and 3); Rules for the token; Which workspace
 
-One sign-in lets you act in the viaSocket account of the person you work for: build their own automations
-(my-automations.md), their product's MCP server
-(mcp.md) and their plug (plugs.md), as them. One
-page revokes it.
+`VIASOCKET_AGENT_TOKEN` is the developer's own viaSocket token. It signs what belongs to the product itself rather
+than to one of its end users: the product's own automations (my-automations.md),
+its MCP server (mcp.md) and its plug (plugs.md).
+One page revokes it.
 
-The features for their product's users need none of this: the product's own keys sign those calls. The `setup`
-command that writes those keys signs in this same way while it runs, so after it `VIASOCKET_AGENT_TOKEN` is already
-in `.env`.
+The skill's "Sign in", the `setup` command, writes this token beside the product's keys, so after it nothing on
+this page is needed. This page is for an agent that has only the viaSocket connector, a machine with no terminal,
+or a check that the token works. Calls for the product's end users never carry it: the product's keys sign those.
 
 The ways in, in order, are the skill's "Sign in": 1 the viaSocket MCP server already connected (or its own sign-in),
-2 the login command, 3 a token they paste. Take the first one you can do; when it fails,
+2 the setup command, 3 a token they paste. Take the first one you can do; when it fails,
 take the next without a word about the failure: the person sees only the next link or command. Below: how each way
 works, how to check you are in, and what to do when one fails.
 
@@ -50,19 +50,19 @@ do that yourself. When only they can, ask once, then wait:
 When they say it is done, call `get_org_details_by_token`; it, not the person, confirms the sign-in. If they do not
 know what to do there, or it still fails, the next way at once: never explain connectors.
 
-## 2. The login command, when you can run a command on the machine where their browser is
+## 2. The setup command, when you can run a command on the machine where their browser is
 
 Run it in the project folder (Node.js 20+; nothing to install):
 
 ```bash
-npx -y viasocket-apps login --no-open
+npx -y viasocket-apps setup --no-open
 ```
 
 It prints a sign-in link and waits up to five minutes. Give them the link as the one thing to do:
 
 > Sign in here: <link>, pick your workspace, and click **Allow**.
 
-On Allow it writes `VIASOCKET_AGENT_TOKEN` and `VIASOCKET_ORG_ID` to `.env`, checks them with viaSocket, prints one
+On Allow it writes `VIASOCKET_AGENT_TOKEN`, `VIASOCKET_ORG_ID` and the product's keys to `.env`, checks them with viaSocket, prints one
 line naming the workspace and the file, and exits 0: that line is the check. It never prints the token; never open
 `.env` to read it, the calls read it from there. `.env` goes in `.gitignore` before any commit; the command warns
 when it is not.
@@ -76,8 +76,9 @@ when it is not.
   lapsed; the link is the message.
 - It lands in the workspace they pick on the sign-in page, which may not be the one the work is in: the printed
   workspace and `VIASOCKET_ORG_ID` say which. When the work lives in a known workspace, name it in the one line.
-- `--env <file>` picks another file. The same package's `setup` and `mcp` commands sign in this way themselves when
-  `.env` has no token.
+- `--env <file>` picks another file. The package's `login` command is this same sign-in writing the token and org id
+  alone; the skill names `setup` so one command covers every job. `mcp` signs in this way itself when `.env` has no
+  token.
 
 ## 3. A token they paste, for every other agent
 
@@ -95,7 +96,7 @@ never repeat it, and once the job is done tell them in one line that **Regenerat
 
 ## Using the token (ways 2 and 3)
 
-It is their personal token for that workspace: it never expires, it acts as them, and it is revoked from the same
+It is the developer's own token for that workspace: it never expires, it acts as them, and it is revoked from the same
 page (Regenerate). Send it on every viaSocket call as a header, exactly as it is:
 
 ```
@@ -130,6 +131,6 @@ guess.
 ## Which workspace
 
 The token belongs to one workspace. If they have several, the sign-in page asked them to pick one; the check above
-says which. Every Developer Hub URL carries that org id; the automation calls need none.
+says which. Every Developer Hub URL and the run-history call carry that org id; the flow calls carry only the token.
 
 END OF PAGE

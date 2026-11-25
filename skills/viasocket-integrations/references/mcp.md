@@ -4,7 +4,7 @@ Part of the viaSocket skill: https://viasocket.com/docs/skill.md.
 
 Contents: 1. Decide, then get a yes; 2. Build it; 3. A code tool for the rest of the API; Finished when; When it goes wrong
 
-The person you work for wants their product usable from Claude, ChatGPT, Cursor or any other agent: a user asks
+The developer you work for wants their product usable from Claude, ChatGPT, Cursor or any other agent: a user asks
 their AI to do something, and it happens inside the product. That takes an MCP server, one web address an AI client
 adds to get a set of tools. viaSocket hosts it; the product hosts only the API it already has.
 
@@ -225,7 +225,7 @@ that code, so the product hosts nothing new.
 
 How it works:
 
-- A flow in the person's own viaSocket account, with a webhook trigger and one step. The step checks the caller, then
+- A flow in the developer's viaSocket workspace, with a webhook trigger and one step. The step checks the caller, then
   runs the code it was sent with two things in reach: `api()`, which calls the product's API as the signed-in user,
   and `input`.
 - The MCP server's `run_code` tool posts to that webhook. The AI client's token reaches the flow as it reaches any
@@ -239,7 +239,7 @@ How it works:
 Limits:
 
 - **25 seconds:** the tool call ends at 30, and the webhook answers only when the run ends, so longer code fails.
-- **Each call is a flow run** in the person's own viaSocket account and counts on its plan.
+- **Each call is a flow run** in the developer's viaSocket workspace and counts on its plan.
 - **The code acts as the user:** it can do whatever their token allows and send what it reads anywhere with `fetch`,
   like any code an AI writes. Offer it only on a server with a login. To keep some endpoints out (admin, key
   minting), refuse their paths in `api()`.

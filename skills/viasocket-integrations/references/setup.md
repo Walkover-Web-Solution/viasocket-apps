@@ -14,7 +14,7 @@ project, before any code. The product needs the three in `.env`:
 | `VIASOCKET_PROJECT_ID` | the embed project id |
 | `VIASOCKET_EMBED_SECRET` | the signing secret. Server only: never in client code, a fixture or a log |
 
-If all three are already there (the prompt or the person you work for put them), skip to "The module".
+If all three are already there (the prompt or the developer you work for put them), skip to "The module".
 
 ## One command, one click
 
@@ -33,9 +33,11 @@ browser for them; never describe a sign-in that failed: run it again and hand th
 
 When they click Allow, it:
 
-- writes `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET` and `VIASOCKET_AGENT_TOKEN` (their own
-  token) into `.env`. The deployed server needs the first three only: the agent token is the person's own and stays
-  on the machine where the work is done. `.env` goes in `.gitignore` before any commit; the command warns when it is
+- writes `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET` and `VIASOCKET_AGENT_TOKEN` (the
+  developer's own token) into `.env`. The deployed server needs the first three. It needs the agent token too only
+  when it makes the token's calls at run time (Run Action, creating or changing the product's own flows); calling a
+  saved flow by its URL needs none. When the work needs only the token (a plug, the product's own automation, its MCP
+  server), run this same command: the project it creates is empty and left unused. `.env` goes in `.gitignore` before any commit; the command warns when it is
   not;
 - picks the embed project and prints it: the one already in `.env`, else the workspace's only embed, else a new one
   named after the folder (`--name <title>` names it). `--new` always makes a new one: one embed per product, so a

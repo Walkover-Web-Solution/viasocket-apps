@@ -113,7 +113,7 @@ enabled again.
   and fill the key from it on every run. Each event's page has a **Pickers** section for exactly this: for each such
   key, the event and `fieldKey` that list it before any action is chosen (`Get_Site` lists `siteUrl` for Search Console).
   A value that changes with the run (a message, a row, a date range, a recipient) is chosen in the action's own form
-  or filled by the product. Say which in the plan table of app-integrations.md; the person you work for
+  or filled by the product. Say which in the plan table of app-integrations.md; the developer you work for
   confirms it.
 
 ## Options
@@ -194,7 +194,7 @@ return out`
   so this record is the only copy.
 - `scheduledTime` (minutes, as a string) in `inputData` sets how often a trigger that polls checks; left out, it is
   `"15"`.
-- `{ webhook: url }` instead of `{ code }` only when the person you work for asks for exactly that.
+- `{ webhook: url }` instead of `{ code }` only when the developer you work for asks for exactly that.
 
 ## When it goes wrong
 

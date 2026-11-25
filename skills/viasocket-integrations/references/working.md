@@ -39,7 +39,8 @@ Every feature page assumes this order.
 
 ## 2. Plan, then a yes
 
-The person may not code, and reads only the start of each message. Every rule here follows from that.
+The developer you work for may code or not, and reads only the start of each message. Every rule here follows
+from that; the plain-words rule bends for one who codes.
 
 - **The plan comes first,** before any sign-in or code, so they know what they sign in for. To know the job can be
   done, read the app's page (https://viasocket.com/docs/<app slug>.md) and the catalog search
@@ -55,8 +56,9 @@ The person may not code, and reads only the start of each message. Every rule he
 - **No clear ask** ("do something good with it", "make it like Zapier"): offer the idea you would build and two
   others, one line each, on what the product already has, fewer sign-ins first. "You decide" is a yes to the first.
   Each idea is one line of the skill, so its page is known before they answer.
-- **Plain words.** No word from these pages (embed, token, secret, env, trigger, flow, webhook), nor any other word
-  they would have to look up, in anything you ask; the one exception is the exact name of a file, a button or a
+- **Plain words, for one who does not code.** No word from these pages (embed, token, secret, env, trigger, flow,
+  webhook), nor any other word they would have to look up, in anything you ask; a developer who codes gets the real
+  names (`.env`, `VIASOCKET_*`) instead; the one exception is the exact name of a file, a button or a
   setting they must open or click, written as it reads. A word they do not know is a question they cannot answer.
 - **One message per ask, the ask in its first line,** with a direct link when it needs a click; never a path such as
   "Settings → Integrations → Install Code". A message that asks is three lines at most; the plan is the one
@@ -71,28 +73,28 @@ The person may not code, and reads only the start of each message. Every rule he
   the plan's yes when the plan said what is saved. Anything that sends or writes outside viaSocket (a message, a
   row, an email) needs that yes and a test target made for the test, because a wrong send reaches their customers
   and cannot be unsent.
-- **Two kinds of work in one request** ("users connect their Slack, and tell our team's Slack when one does") is an
-  app integration for the users and a workflow of the person's own: build both, in one plan. The two never share a
-  connection: a product that wants to act through the person's own apps calls one of the person's own workflows. A
-  user's call is never signed with the person's connection, and the person's connection never serves a user.
+- **An end user's automation and the product's own in one request** ("users connect their Slack, and tell our
+  team's Slack when one does") is an app integration for the users and an automation of the product's own: build
+  both, in one plan. The two never share a connection: an end user's call is never signed with the developer's
+  connection, and the developer's connection never serves an end user.
 
 ## 3. Sign in
 
 After the yes, their sign-in is one link and one click, or one paste. Take the first way below you can do, and never
 list the ways to them or ask them to choose: a choice between ways is a fourth ask. When one fails, take the next
 without a word about it. How each way works, the check that you are in, and what to do when one fails:
-agent-access.md for their own account, setup.md for
-a product's three keys.
+setup.md for the keys, agent-access.md for the
+developer's own token, which the same command writes.
 
 1. **The viaSocket MCP server (the connector) is already connected** (`get_org_details_by_token` is in your tool
-   list and answers an org): you are in their account. When its tools say they need a sign-in, or the work is in
+   list and answers an org): you are in the developer's workspace. When its tools say they need a sign-in, or the work is in
    their product and needs the three keys, use way 2 if you can run a command where their browser is; with only the
    connector, the agent-access page and the setup page ("Through the viaSocket MCP server") each say the one thing
    to hand them.
 2. **You can run a command on the machine where their browser is** (not a cloud sandbox: its sign-in link comes
    back to a machine their browser cannot reach). In the project folder, with Node.js 20+ and nothing to install:
-   - the work is in their product, for its users: `npx -y viasocket-apps setup --no-open`
-   - the work is in their own account: `npx -y viasocket-apps login --no-open`
+      `npx -y viasocket-apps setup --no-open`, which signs the developer in and writes every key: the product's three
+   and the developer's own token.
 
    It prints a sign-in link; give it as the one thing to do: "Sign in here: <link>, pick your workspace, click
    **Allow**." On Allow, `.env` holds what the work needs, and the command never prints a secret. On exit 1 run it
@@ -102,14 +104,14 @@ a product's three keys.
    button. Say: "Open this link, sign in, click Create keys if it shows, then Copy, and paste it into <the exact
    place>." The place is the project's `.env`, the builder's secret settings, or, in a chat, you; then keep it only
    where your calls read it and never repeat it.
-   - their account: https://flow.viasocket.com/agent-access, as `VIASOCKET_AGENT_TOKEN`
+      - the developer's own token: https://flow.viasocket.com/agent-access, as `VIASOCKET_AGENT_TOKEN`
    - a product's three keys: https://flow.viasocket.com/embed-keys?name=<the product's name>, which copies all three
 
 What the sign-in gives:
 
 | in `.env` | stands for | used by |
 | --- | --- | --- |
-| `VIASOCKET_AGENT_TOKEN` | their own account. Through the connector its tools carry the sign-in and nothing is written; the org id is then `get_org_details_by_token`'s `data.org.id` | everything in their own account |
+| `VIASOCKET_AGENT_TOKEN` | the developer's own token: what belongs to the product itself (its own automations, its plug, its MCP server). Through the connector its tools carry the sign-in and nothing is written; the org id is then `get_org_details_by_token`'s `data.org.id` | the product's own automations, plugs, the MCP server |
 | `VIASOCKET_ORG_ID`, `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET` | the product's three keys: their account, the product's home in it, and the secret that signs each user's calls | everything for the product's users (login and organisations excepted: 36Blocks keys) |
 
 - `setup` writes the agent token and the three keys; `login` writes the agent token and the org id.

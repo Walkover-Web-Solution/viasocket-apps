@@ -7,13 +7,13 @@ with roles and permissions, as ready screens, from the first day. 36Blocks, from
 account itself, so the product needs no users table, no password storage and no auth schema. Free up to 1,000 monthly
 active users and 3 blocks.
 
-Use it when the product has no login yet, or the person you work for asks for one, for teams or for organisations.
+Use it when the product has no login yet, or the developer you work for asks for one, for teams or for organisations.
 Never move a product that already has its own login onto it: say that needs 36Blocks support.
 
 ## Steps
 
 1. **A block:** one product's auth setup (its theme, its roles and permissions, and the redirection URL), with an
-   id, the `reference_id`. Only the person you work for can create one: ask them to sign up at
+   id, the `reference_id`. Only the developer you work for can create one: ask them to sign up at
    https://36blocks.com, create a block, set its redirection URL to the product's callback route (step 3) and its
    roles, and give you the `reference_id`. One block per product and environment (staging and production apart);
    every page of one product shares one block and one callback.

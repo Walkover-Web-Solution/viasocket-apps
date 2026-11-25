@@ -44,7 +44,7 @@ viaSocket keeps each connection alive, and the product keeps one id per user and
    | react to the app's events (each one thing the trigger reports, as the product receives it): a subscription switches a trigger on for a user, with a handler, code that runs on viaSocket when an event arrives, and a `script_id` of its own | actions-and-events.md |
    | show every app and any action's form in its own screens | https://viasocket.com/docs/catalog-api.md |
    | let users build their own workflows in viaSocket's screens | https://viasocket.com/docs/embed.md |
-   | use an action viaSocket runs itself as a step: Run AI Model, Delay, Memory (key-value storage), SMS, WhatsApp, translation, currency, PDF, web data | https://viasocket.com/docs/skill/built-in-actions.md |
+   | use an action viaSocket runs itself as a step: Run AI Model, Delay, Memory (key-value storage inside a flow, not AI memory), SMS, WhatsApp, translation, currency, PDF, web data | https://viasocket.com/docs/skill/built-in-actions.md |
    | pick the AI action for a job (write, classify, decide, draw), run it cheaper in the background, or use any step whose reply comes later | ai-steps.md |
    | sign its users in through its own OAuth app (its own client ID and secret for an app), when the person asks for that | own-oauth-app.md |
    | list, pause, reconnect or revoke what a user has | manage.md |
@@ -61,7 +61,7 @@ viaSocket keeps each connection alive, and the product keeps one id per user and
 ## Finished when
 
 Every line below that applies has been decided and the report says how. A request like "integrate Slack" makes
-every line apply to each action and trigger in play, even when the person you work for named none of them.
+every line apply to each action and trigger in play, even when the developer you work for named none of them.
 
 - **Confirmed:** the three-line plan was shown and they said yes before the code; the table is in
   `viasocket-plan.md` and the report, with what they changed.

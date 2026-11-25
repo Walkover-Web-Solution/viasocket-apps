@@ -4,7 +4,7 @@ Back to the skill: https://viasocket.com/docs/skill.md
 
 A plug makes an app available on viaSocket: its connection (OAuth, API key), its actions and its triggers, each with a
 form and the code that calls the app's API. Once it exists, every flow, every product built with this skill and every
-MCP server on viaSocket can use that app. The person you work for builds one in the Developer Hub, for an app
+MCP server on viaSocket can use that app. The developer you work for builds one in the Developer Hub, for an app
 viaSocket lacks or for their own product, and fixes or extends the plugs their org owns. viaSocket's own plugs are
 never edited: a missing action, trigger or field on one is reported (`report_feedback`, `kind: missing_capability`).
 
@@ -36,7 +36,7 @@ Only building or changing needs a guide. Listing or inspecting plugs, their acti
 reads from the table below, with no guide to fetch.
 
 The guides' inputs (`ORG_ID`, `APP_NAME`, `APP_DOMAIN`, `API_BASE`, `PLUGIN_ID`, …): `ORG_ID` is the org from
-agent-access; `API_BASE` is `https://flow-api.viasocket.com`; the rest comes from the person you work for or from the
+agent-access; `API_BASE` is `https://flow-api.viasocket.com`; the rest comes from the developer you work for or from the
 MCP's list tools (`list_plugins` answers each plug's `rowid`, the `PLUGIN_ID`; `list_actions_and_triggers` the action
 and version ids), mapped without the MCP below. Knowledge-base sections the guide cites are fetched one at a time through
 `https://viasocket.com/docs/plugs/knowledge-base/index.md`;

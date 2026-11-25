@@ -26,7 +26,7 @@ Only when one of these happens (never to report success):
 - an app's action or trigger misbehaves on viaSocket's side: it errors on valid input, returns empty or wrong data,
   its fields or `list-options` are broken, or an event never arrives (`kind: error`, `source: action` or `trigger`);
 - a page here, a type in the package or a doc says one thing and the API does another (`kind: wrong_instructions`);
-- the person you work for corrects what you built or picked (`kind: user_correction`);
+- the developer you work for corrects what you built or picked (`kind: user_correction`);
 - viaSocket lacks an app, action, trigger or field the product needs (`kind: missing_capability`, `source: plug` for a
   missing app, `action` or `trigger` for a missing one; name it in `refs.app`). "When viaSocket lacks it" below says
   what to do first and after;
@@ -48,7 +48,7 @@ event, with `reported: false`.
    (plugs.md), except on a plug viaSocket owns.
    **Nothing live for the app** while you build a product: the search finds it nowhere, or its page answers "Nothing
    to integrate". That means either no plug exists, or a plug exists with no published actions or triggers yet; the
-   page can't tell which. Check the person's own org (`list_plugins`, or its call in
+   page can't tell which. Check the developer's own org (`list_plugins`, or its call in
    plugs.md, matching the app's name or domain): a plug of theirs for this app,
    published or not, is theirs to finish.
    Then ask the person once, as a form (choice buttons when the client has them, else one short message with two
@@ -99,7 +99,7 @@ data. No need to ask first; list what you reported in your final report.
 
 With the viaSocket connector (MCP) connected, call its `report_feedback` tool. Without it,
 `POST https://flow.sokt.io/func/scriVmoUHhmc` with `Content-Type: application/json`, no auth header, and the same body
-plus `orgId` (`VIASOCKET_ORG_ID`, or, when there is no product, the org id the sign-in check answers) and `projectId`
+plus `orgId` (`VIASOCKET_ORG_ID`, or, before setup has run, the org id the sign-in check answers) and `projectId`
 (`VIASOCKET_PROJECT_ID`, when there is one). Either way it answers
 `{ success, requestId, status, message }` within a few seconds; keep `requestId` as "When viaSocket lacks it" says.
 If the call fails, carry on.

@@ -52,7 +52,7 @@ section 1.
 
 ## 3. With the viaSocket connector or the agent token
 
-Signed in to the person's own account (agent-access.md), you can list their own
+With the developer's token (agent-access.md), you can list the developer's own
 connections and make a sign-in link: **List Connections** and **Create Connection Link** on
 my-automations.md. Those are their connections in their workspace, for their own
 automations; use them to look at an app's real data, not as a stand-in for the product's test: the product's calls

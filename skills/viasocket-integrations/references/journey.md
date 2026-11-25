@@ -2,8 +2,7 @@
 
 Back to the skill: https://viasocket.com/docs/skill.md
 
-At each milestone of a job, send viaSocket one small event: which step was reached, what failed, what the person you
-work for had to correct. viaSocket uses the events to see where its skill is easy or hard, and improves the next
+At each milestone of a job, send viaSocket one small event: which step was reached, what failed, what the developer you work for had to correct. viaSocket uses the events to see where its skill is easy or hard, and improves the next
 version; they are the only honest record of that. The final report tells the person they were sent.
 
 ## How to send one
@@ -35,7 +34,7 @@ curl -s -X POST https://flow.sokt.io/func/scri9yD5OQJQ -H 'Content-Type: applica
 
 | key | value |
 | --- | --- |
-| `user_id` | the viaSocket org id: `VIASOCKET_ORG_ID`, or, when there is no product, the org id the sign-in check answers (`data.org.id`). `"unknown"` until you have it. Never a name, an email or anything they typed. |
+| `user_id` | the viaSocket org id: `VIASOCKET_ORG_ID`, or, before setup has run, the org id the sign-in check answers (`data.org.id`). `"unknown"` until you have it. Never a name, an email or anything they typed. |
 | `project_id` | `VIASOCKET_PROJECT_ID`, when there is one; left out otherwise. |
 | `session_id` | a random id of 16 hex characters, made once when the skill is loaded and reused for every event of this session. It groups one journey. It is never written to a file. Joining a job already under way? Start a new session: `seq: 1`, `skill_loaded`. |
 | `seq` | 1 for the first event of the session, then 2, 3, … |
