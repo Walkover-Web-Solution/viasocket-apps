@@ -17,7 +17,7 @@ compatibility: >-
   proxy.msg91.com; plug work also app.docstar.io (the Developer Hub API reference). Any language; the viasocket-apps package runs on Node 20+, Bun, Deno and edge runtimes.
 metadata:
   author: viaSocket
-  version: '2026-11-26.5'
+  version: '2026-11-26.6'
 ---
 
 # viaSocket
@@ -34,16 +34,16 @@ built on it.
 - **Your own agent's tools.** This is for an agent you host yourself (LangChain, Vercel AI SDK, any framework): each
   action in a user's connected apps becomes one of its tools. For viaSocket's own AI, read the AI bullet instead.
   How an action becomes a tool: references/actions-and-events.md, section "The enabled app".
-- **Built-in actions.** Actions that need no app connection: AI, PDF, SMS, WhatsApp, translation, currency, web data.
-  https://viasocket.com/docs/skill/built-in-actions.md
+- **Built-in actions.** viaSocket's own actions: AI, PDF, translation, currency and web data need no connection; SMS and
+  WhatsApp need one, like any app. https://viasocket.com/docs/skill/built-in-actions.md
 - **Automations.** A flow that viaSocket runs for you on a schedule, when an app sends an event, or when your server
   calls a webhook. viaSocket retries it and keeps every run; a step can wait for a person to approve. A flow can
   belong to one end user (your code defines it, the user switches it on with one button), be built by that user in
   ready screens, or belong to the product itself, such as a nightly report to your team's Slack. The page says
   which one to use. https://viasocket.com/docs/automations.md
 - **AI.** A bot, an agent or an AI feature in your product, on OpenAI, Anthropic and Google models. viaSocket keeps
-  each conversation. The model's tools come from your API, any MCP server and the user's connected apps.
-  https://viasocket.com/docs/ai.md. AI inside an automation: references/ai-steps.md
+  each conversation. The model's tools come from your API, from any MCP server, and from the user's connected apps
+  through an endpoint of yours or through a flow of theirs on their own MCP server. https://viasocket.com/docs/ai.md. AI inside an automation: references/ai-steps.md
 - **AI memory.** Long-term memory for an agent: what it has learned about a user, a team or an account, and the
   product's own documents. An agent searches it by meaning, not by exact words. It works for viaSocket's AI and for
   any agent you run elsewhere. It is not the Memory step of a flow, which keeps one value between runs. https://memory-api.viasocket.com/guide.md
@@ -111,6 +111,6 @@ references/working.md.
   on a test target (a test channel, a test row), never on real customers.
 - Never invent an id, slug, key or URL. Copy them from the pages and from real answers.
 
-Skill version `2026-11-26.5`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
+Skill version `2026-11-26.6`, an installed copy. The skill is served live at https://viasocket.com/docs/skill.md (Node.js backend: https://viasocket.com/docs/skill.md?format=sdk): fetch it once per session, and when its version line is newer than this one, follow it instead of this copy. Quote the version you followed in every problem report and progress event.
 
 END OF PAGE
