@@ -1,0 +1,17 @@
+{
+  "name": "viasocket",
+  "metadata": {
+    "description": "viaSocket's plugin for Claude: the viaSocket MCP connector and the viaSocket integrations skill."
+  },
+  "owner": {
+    "name": "viaSocket",
+    "email": "support@viasocket.com"
+  },
+  "plugins": [
+    {
+      "name": "viasocket",
+      "source": "./plugins/viasocket",
+      "description": "viaSocket for Claude: connect 2,300+ apps, build automations, and add AI agents, AI memory, login and an MCP server to a product. Bundles the viaSocket MCP connector and the viaSocket integrations skill."
+    }
+  ]
+}

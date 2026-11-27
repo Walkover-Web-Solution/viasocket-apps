@@ -1,0 +1,24 @@
+{
+  "name": "viasocket",
+  "version": "1.0.0",
+  "description": "viaSocket for Claude: connect 2,300+ apps, build automations, and add AI agents, AI memory, login and an MCP server to a product. Bundles the viaSocket MCP connector and the viaSocket integrations skill.",
+  "author": {
+    "name": "viaSocket",
+    "email": "support@viasocket.com",
+    "url": "https://viasocket.com"
+  },
+  "homepage": "https://viasocket.com",
+  "privacyPolicyUrl": "https://viasocket.com/privacy",
+  "repository": "https://github.com/Walkover-Web-Solution/viasocket-apps",
+  "license": "MIT",
+  "keywords": [
+    "viasocket",
+    "integrations",
+    "automation",
+    "workflows",
+    "oauth",
+    "ai-agent",
+    "ai-memory",
+    "mcp"
+  ]
+}

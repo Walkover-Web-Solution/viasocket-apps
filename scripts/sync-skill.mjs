@@ -8,6 +8,10 @@
 // variants (https://viasocket.com/docs/skill.md is the same page filled and in one form). The copy is the
 // HTTP form: the sdk variant dropped, the markers removed, links to the skill's other pages made relative,
 // and the "installed copy" footer added to the root page. Nothing in the folder is edited by hand.
+//
+// The Claude plugin in plugins/viasocket/ ships the same pages under its own skills/ folder, because a plugin
+// folder cannot reach files outside itself. Both copies are written and checked together, and the plugin's
+// version in plugins/viasocket/.claude-plugin/plugin.json is raised by one patch each time its copy changes.
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,7 +20,37 @@ const SOURCE = 'https://flow.viasocket.com/skills/viasocket-integrations'
 const DOCS = 'https://viasocket.com/docs'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const outDir = join(root, 'skills', 'viasocket-integrations')
+const pluginManifest = join(root, 'plugins', 'viasocket', '.claude-plugin', 'plugin.json')
+const pluginSkillDir = join(root, 'plugins', 'viasocket', 'skills', 'viasocket-integrations')
+const outDirs = [outDir, pluginSkillDir]
 const check = process.argv.includes('--check')
+
+// What differs between a folder on disk and the pages just built: changed or missing pages, and stale ones.
+const diffDir = (dir, files) => {
+  const current = new Map()
+  const walk = (at, prefix) => {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      if (entry.isDirectory()) walk(join(at, entry.name), `${prefix}${entry.name}/`)
+      else current.set(`${prefix}${entry.name}`, readFileSync(join(at, entry.name), 'utf8').replace(/\r\n/g, '\n'))
+    }
+  }
+  if (existsSync(dir)) walk(dir, '')
+  const changed = [...files].filter(([path, text]) => current.get(path) !== text).map(([path]) => path)
+  const stale = [...current.keys()].filter((path) => !files.has(path))
+  return { changed, stale }
+}
+
+// The directory lists a plugin by its version, so a changed skill copy is a new patch release of the plugin.
+const bumpPluginVersion = () => {
+  const manifest = JSON.parse(readFileSync(pluginManifest, 'utf8'))
+  const parts = String(manifest.version).split('.').map(Number)
+  if (parts.length !== 3 || parts.some((n) => !Number.isInteger(n) || n < 0)) {
+    throw new Error(`plugin.json: version "${manifest.version}" is not major.minor.patch`)
+  }
+  manifest.version = `${parts[0]}.${parts[1]}.${parts[2] + 1}`
+  writeFileSync(pluginManifest, `${JSON.stringify(manifest, null, 2)}\n`)
+  return manifest.version
+}
 
 const fetchSource = async (path) => {
   const res = await fetch(`${SOURCE}/${path}`, { headers: { 'User-Agent': 'viasocket-apps sync-skill' } })
@@ -69,30 +103,33 @@ const main = async () => {
   for (const [name, text] of pages) files.set(`references/${name}.md`, toInstalledCopy(text, false, version))
 
   if (check) {
-    const current = new Map()
-    const walk = (dir, prefix) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (entry.isDirectory()) walk(join(dir, entry.name), `${prefix}${entry.name}/`)
-        else current.set(`${prefix}${entry.name}`, readFileSync(join(dir, entry.name), 'utf8').replace(/\r\n/g, '\n'))
-      }
+    const differing = []
+    for (const dir of outDirs) {
+      const { changed, stale } = diffDir(dir, files)
+      const label = dir === outDir ? 'skills' : 'plugins/viasocket/skills'
+      differing.push(...changed.map((p) => `${label}: ${p}`), ...stale.map((p) => `${label}: ${p} (no longer published)`))
     }
-    if (existsSync(outDir)) walk(outDir, '')
-    const changed = [...files].filter(([path, text]) => current.get(path) !== text).map(([path]) => path)
-    const stale = [...current.keys()].filter((path) => !files.has(path))
-    if (changed.length || stale.length) {
-      console.log(`skill copy differs from the published skill ${version}:\n  ${[...changed, ...stale.map((p) => `${p} (no longer published)`)].join('\n  ')}`)
+    if (differing.length) {
+      console.log(`skill copy differs from the published skill ${version}:\n  ${differing.join('\n  ')}`)
       process.exit(1)
     }
     console.log(`skill copy matches the published skill ${version}`)
     return
   }
 
-  rmSync(outDir, { recursive: true, force: true })
-  for (const [path, text] of files) {
-    mkdirSync(dirname(join(outDir, path)), { recursive: true })
-    writeFileSync(join(outDir, path), text)
+  // A plugin copy that already existed and now differs is a new release of the plugin; the first write is not.
+  const pluginDiff = diffDir(pluginSkillDir, files)
+  const pluginChanged = existsSync(pluginSkillDir) && (pluginDiff.changed.length > 0 || pluginDiff.stale.length > 0)
+
+  for (const dir of outDirs) {
+    rmSync(dir, { recursive: true, force: true })
+    for (const [path, text] of files) {
+      mkdirSync(dirname(join(dir, path)), { recursive: true })
+      writeFileSync(join(dir, path), text)
+    }
   }
-  console.log(`skill copy ${version}: ${files.size} files written`)
+  console.log(`skill copy ${version}: ${files.size} files written to ${outDirs.length} folders`)
+  if (pluginChanged && existsSync(pluginManifest)) console.log(`plugin version raised to ${bumpPluginVersion()}`)
 }
 
 main().catch((error) => {
