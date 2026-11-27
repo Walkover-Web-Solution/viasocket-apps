@@ -9,9 +9,14 @@
 // HTTP form: the sdk variant dropped, the markers removed, links to the skill's other pages made relative,
 // and the "installed copy" footer added to the root page. Nothing in the folder is edited by hand.
 //
-// The Claude plugin in plugins/viasocket/ ships the same pages under its own skills/ folder, because a plugin
-// folder cannot reach files outside itself. Both copies are written and checked together, and the plugin's
-// version in plugins/viasocket/.claude-plugin/plugin.json is raised by one patch each time its copy changes.
+// The Claude plugin in plugins/viasocket/ ships its own copy of the root page only, under its own skills/ folder
+// (a plugin folder cannot reach files outside itself). The Claude directory refuses a plugin that sends data to
+// its vendor for the vendor's own use unless the user switched that on, so the plugin copy differs from the
+// installed copy in three ways: every sentence about progress events or problem reports is removed, a closing
+// section says the plugin sends neither, and the links stay on viasocket.com because no reference page is
+// shipped. It also carries no skill version, so it changes only when the page's own text does. Both copies are
+// written and checked together, and the plugin's version in plugins/viasocket/.claude-plugin/plugin.json is
+// raised by one patch each time its copy changes.
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,7 +27,6 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const outDir = join(root, 'skills', 'viasocket-integrations')
 const pluginManifest = join(root, 'plugins', 'viasocket', '.claude-plugin', 'plugin.json')
 const pluginSkillDir = join(root, 'plugins', 'viasocket', 'skills', 'viasocket-integrations')
-const outDirs = [outDir, pluginSkillDir]
 const check = process.argv.includes('--check')
 
 // What differs between a folder on disk and the pages just built: changed or missing pages, and stale ones.
@@ -61,13 +65,16 @@ const fetchSource = async (path) => {
 const REF = /https:\/\/viasocket\.com\/docs\/skill\/([a-z0-9-]+)\.md/g
 const refsIn = (text) => [...new Set([...text.matchAll(REF)].map((m) => m[1]))]
 
+// Both copies are the HTTP form: drop the package (sdk) variant, keep the http one without its markers.
+const toHttpForm = (text) =>
+  text
+    .replace(/<!--sdk-->[^\n]*?<!--\/sdk-->/g, '') // inline, mid-sentence
+    .replace(/^<!--sdk-->\n[\s\S]*?^<!--\/sdk-->\n\n?/gm, '') // a block on its own lines
+    .replace(/^<!--\/?http-->\n\n?/gm, '') // block markers on their own line
+    .replace(/<!--\/?http-->/g, '') // inline markers
+
 const toInstalledCopy = (text, isRoot, version) => {
-  let s = text
-  // The copy is the HTTP form: drop the package (sdk) variant, keep the http one without its markers.
-  s = s.replace(/<!--sdk-->[^\n]*?<!--\/sdk-->/g, '') // inline, mid-sentence
-  s = s.replace(/^<!--sdk-->\n[\s\S]*?^<!--\/sdk-->\n\n?/gm, '') // a block on its own lines
-  s = s.replace(/^<!--\/?http-->\n\n?/gm, '') // block markers on their own line
-  s = s.replace(/<!--\/?http-->/g, '') // inline markers
+  let s = toHttpForm(text)
   // Links to the skill's other pages become relative. A URL inside backticks is a literal the reader may
   // fetch, so it stays; built-in-actions is generated from the live catalog, so the copy keeps its live URL.
   s = s.replace(/(`?)https:\/\/viasocket\.com\/docs\/skill\/([a-z0-9-]+)\.md/g, (m, tick, name) =>
@@ -79,6 +86,106 @@ const toInstalledCopy = (text, isRoot, version) => {
   }
   if (!/END OF PAGE\s*$/.test(s)) s += '\nEND OF PAGE\n'
   return s
+}
+
+// The words that mark a sentence about a progress event or a problem report sent to viaSocket.
+const SENDS = /progress events?|journey|skill_loaded|report_feedback|report_published|feedback\.md|problem reports?|`problem`/i
+
+const PLUGIN_SECTION = `## What this plugin sends to viaSocket
+
+Nothing for viaSocket's own use. This copy of the skill ships in the viaSocket plugin for Claude, and the plugin
+sends no progress events and no problem reports. A page on viasocket.com may ask for one: skip that step. The
+connector's \`report_feedback\`, \`report_published\` and \`send_feedback_to_viasocket\` tools are for when the developer
+asks you to send viaSocket a report. When a call fails, or viaSocket lacks an app or a feature, tell the developer in
+plain words what happened; they can write to support@viasocket.com.
+`
+
+const LIST_ITEM = /^\s*(?:[-*]|\d+\.)\s/
+const WIDTH = 118
+
+// One paragraph or list item, as one line, without its sentences about a send. '' when nothing else is left.
+const withoutSends = (lines) => {
+  const flat = lines.map((line, i) => (i ? line.trim() : line.trimEnd())).join(' ')
+  const units = flat.split(/(?<=[.!?;])\s+/)
+  const kept = []
+  let dropped = false
+  for (const unit of units) {
+    if (SENDS.test(unit)) {
+      dropped = true
+      continue
+    }
+    // A clause left hanging by the sentence dropped after it ends as a sentence of its own.
+    if (dropped && kept.length) kept[kept.length - 1] = kept[kept.length - 1].replace(/[;,]$/, '.')
+    dropped = false
+    kept.push(unit)
+  }
+  if (dropped && kept.length) kept[kept.length - 1] = kept[kept.length - 1].replace(/[;,]$/, '.')
+  const text = kept.join(' ')
+  return text.replace(LIST_ITEM, '').replace(/^\s*(?:[-*]|\d+\.)$/, '').trim() ? text : ''
+}
+
+// The line wrapped again at the page's width, its later lines indented under its first word.
+const wrap = (line) => {
+  const lead = line.match(/^\s*(?:(?:[-*]|\d+\.)\s+)?/)[0]
+  const indent = ' '.repeat(lead.length)
+  const [first, ...words] = line.slice(lead.length).split(' ')
+  const out = []
+  let current = lead + first
+  for (const word of words) {
+    if (current.length + 1 + word.length > WIDTH) {
+      out.push(current)
+      current = indent + word
+    } else {
+      current += ` ${word}`
+    }
+  }
+  out.push(current)
+  return out
+}
+
+const toPluginCopy = (text) => {
+  let s = toHttpForm(text)
+  const end = s.indexOf('\n---\n', 4)
+  if (!s.startsWith('---\n') || end < 0) throw new Error('SKILL.md: no front matter')
+  // No skill version in this copy: it would change the file, and so the plugin's version, on every sync.
+  const frontMatter = s.slice(0, end + 5).replace(/^\s*version: '[^']*'\n/m, '')
+  const body = s
+    .slice(end + 5)
+    .replace(/^Skill version `[^`]*`.*\n/m, '')
+    .replace(/\n*END OF PAGE\s*$/, '\n')
+    .split('\n')
+
+  const out = []
+  for (let i = 0; i < body.length; ) {
+    // A fenced block stays whole, or goes whole when it shows a send.
+    if (/^\s*```/.test(body[i])) {
+      let j = i + 1
+      while (j < body.length && !/^\s*```/.test(body[j])) j++
+      const block = body.slice(i, j + 1)
+      if (!SENDS.test(block.join('\n'))) out.push(...block)
+      i = j + 1
+      continue
+    }
+    if (!body[i].trim()) {
+      out.push(body[i])
+      i++
+      continue
+    }
+    let j = i + 1
+    while (j < body.length && body[j].trim() && !LIST_ITEM.test(body[j]) && !/^\s*(?:#|```)/.test(body[j])) j++
+    const block = body.slice(i, j)
+    if (!SENDS.test(block.join('\n'))) out.push(...block)
+    else {
+      const rest = withoutSends(block)
+      if (rest) out.push(...wrap(rest))
+    }
+    i = j
+  }
+
+  // Nothing about a send may be left, whatever shape the page takes later: a line that still names one goes.
+  const clean = out.filter((line) => !SENDS.test(line))
+  s = frontMatter + clean.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '\n')
+  return `${s}\n${PLUGIN_SECTION}\nEND OF PAGE\n`
 }
 
 const main = async () => {
@@ -101,13 +208,21 @@ const main = async () => {
   const files = new Map()
   files.set('SKILL.md', toInstalledCopy(rootPage, true, version))
   for (const [name, text] of pages) files.set(`references/${name}.md`, toInstalledCopy(text, false, version))
+  const pluginFiles = new Map([['SKILL.md', toPluginCopy(rootPage)]])
+
+  const copies = [
+    { dir: outDir, label: 'skills', files },
+    { dir: pluginSkillDir, label: 'plugins/viasocket/skills', files: pluginFiles },
+  ]
 
   if (check) {
     const differing = []
-    for (const dir of outDirs) {
-      const { changed, stale } = diffDir(dir, files)
-      const label = dir === outDir ? 'skills' : 'plugins/viasocket/skills'
-      differing.push(...changed.map((p) => `${label}: ${p}`), ...stale.map((p) => `${label}: ${p} (no longer published)`))
+    for (const copy of copies) {
+      const { changed, stale } = diffDir(copy.dir, copy.files)
+      differing.push(
+        ...changed.map((p) => `${copy.label}: ${p}`),
+        ...stale.map((p) => `${copy.label}: ${p} (no longer published)`)
+      )
     }
     if (differing.length) {
       console.log(`skill copy differs from the published skill ${version}:\n  ${differing.join('\n  ')}`)
@@ -118,17 +233,17 @@ const main = async () => {
   }
 
   // A plugin copy that already existed and now differs is a new release of the plugin; the first write is not.
-  const pluginDiff = diffDir(pluginSkillDir, files)
+  const pluginDiff = diffDir(pluginSkillDir, pluginFiles)
   const pluginChanged = existsSync(pluginSkillDir) && (pluginDiff.changed.length > 0 || pluginDiff.stale.length > 0)
 
-  for (const dir of outDirs) {
-    rmSync(dir, { recursive: true, force: true })
-    for (const [path, text] of files) {
-      mkdirSync(dirname(join(dir, path)), { recursive: true })
-      writeFileSync(join(dir, path), text)
+  for (const copy of copies) {
+    rmSync(copy.dir, { recursive: true, force: true })
+    for (const [path, text] of copy.files) {
+      mkdirSync(dirname(join(copy.dir, path)), { recursive: true })
+      writeFileSync(join(copy.dir, path), text)
     }
   }
-  console.log(`skill copy ${version}: ${files.size} files written to ${outDirs.length} folders`)
+  console.log(`skill copy ${version}: ${files.size} files written, and ${pluginFiles.size} to the plugin`)
   if (pluginChanged && existsSync(pluginManifest)) console.log(`plugin version raised to ${bumpPluginVersion()}`)
 }
 

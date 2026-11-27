@@ -41,18 +41,17 @@ happens during a task is listed here in full.
   viaSocket's own API. The tools act only on your viaSocket account.
 - Tools that change something (create or save a flow, write to the viaSocket API) are marked as write tools, so
   Claude can ask you before it uses them.
-- Three tools send a report to the viaSocket team: `send_feedback_to_viasocket`, `report_feedback` (a problem met
-  while building) and `report_published` (a plug you just published, so viaSocket can review it). A report holds
-  the text Claude writes about the problem; it is not meant to hold secrets, tokens or your private data.
+- Three tools can send the viaSocket team a report: `send_feedback_to_viasocket`, `report_feedback` (a problem met
+  while building) and `report_published` (a plug you just published, so viaSocket can review it). The skill tells
+  Claude to use them only when you ask for a report to be sent. A report holds the text Claude writes; it is not
+  meant to hold secrets, tokens or your private data.
 - `get_viasocket_embed_secret` writes your organisation's embed signing secret to your project's `.env` in
   encrypted form. The secret is not shown in the conversation.
 
 ### The skill
 
-- **Fetches documentation.** The skill reads viaSocket's guides from `viasocket.com/docs`,
-  `memory-api.viasocket.com` and, when you ask for hosting, `embarko.ai/docs`. The copy in this folder is synced
-  from https://viasocket.com/docs/skill.md, and the skill checks that page once per session and follows it when it
-  is newer than the copy.
+- **Fetches documentation.** The plugin ships the skill's root page. The guide for each capability is read from
+  `viasocket.com/docs`, `memory-api.viasocket.com` and, when you ask for hosting, `embarko.ai/docs`.
 - **Runs commands in your project, after you agree to the plan.** These are `npx -y viasocket-apps <command>`
   (for example `setup`, which opens a viaSocket sign-in link and writes `VIASOCKET_ORG_ID`,
   `VIASOCKET_PROJECT_ID`, `VIASOCKET_EMBED_SECRET` and `VIASOCKET_AGENT_TOKEN` to `.env`, and `check`, which looks
@@ -61,18 +60,10 @@ happens during a task is listed here in full.
 - **Calls viaSocket's API.** Calls go to `flow-api.viasocket.com`, `flow.sokt.io`, `flow.viasocket.com`,
   `plug-service.viasocket.com`, `mcp.viasocket.com` and `memory-api.viasocket.com`. Login and organisations work
   also calls `36blocks.com`, `routes.msg91.com` and `proxy.msg91.com`, and plug work reads `app.docstar.io`.
-- **Sends progress events to viaSocket.** At each milestone of a job the skill sends one small unauthenticated
-  `POST` to `https://flow.sokt.io/func/scri9yD5OQJQ`, so viaSocket can see where the skill is easy or hard to
-  follow. An event holds: your viaSocket org id and project id, a random session id, a sequence number, the time,
-  the skill version, the feature being built, the agent's name (for example "Claude Code"), the event name and its
-  status, the app's slug, the action or trigger id, and up to 300 characters of plain words about what happened.
-  It never holds code, values from your data, tokens, secrets or your prompt. viaSocket also records the country
-  the request came from. The full list of events and fields is in
-  [`references/journey.md`](skills/viasocket-integrations/references/journey.md).
-- **Sends problem reports to viaSocket.** When a call fails or viaSocket lacks an app or a feature, the skill
-  sends a report as described in [`references/feedback.md`](skills/viasocket-integrations/references/feedback.md).
-
-If you do not want progress events or problem reports sent, tell Claude at the start of the task.
+- **Sends nothing to viaSocket for viaSocket's own use.** The plugin sends no usage or progress events and no
+  problem reports. Some guide pages on `viasocket.com` describe both for other installs of the skill; the
+  plugin's skill tells Claude to skip those steps. When a call fails, Claude tells you what happened, and you
+  decide whether to report it.
 
 ## Privacy and support
 
@@ -82,8 +73,10 @@ If you do not want progress events or problem reports sent, tell Claude at the s
 
 ## How this folder is kept current
 
-`skills/viasocket-integrations` is written by `scripts/sync-skill.mjs` at the root of this repository and is never
-edited by hand. Each time the served skill changes, the sync rewrites the copy and raises the plugin's version in
+`skills/viasocket-integrations/SKILL.md` is written by `scripts/sync-skill.mjs` at the root of this repository and
+is never edited by hand. The sync takes the root page of the skill viaSocket serves, removes every sentence about
+progress events and problem reports, and adds the section that says the plugin sends neither. When the page's
+text changes, the sync rewrites the copy and raises the plugin's version in
 [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json).
 
 ## License
